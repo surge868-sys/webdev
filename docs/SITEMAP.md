@@ -17,7 +17,12 @@ pedicures, waxing).
 
 ```
 /                       Home
-├── /services           Services & Pricing        [existing content]
+├── /services           Services & Pricing (hub)  [existing content]
+│   ├── /services/haircuts    Haircuts
+│   ├── /services/color       Color & Highlights
+│   ├── /services/styling     Styling & Occasions
+│   └── /services/esthetics   Esthetics — Pedicures & Waxing
+├── /about              About the Studio          [expanded]
 ├── /team               Meet the Team             [existing content]
 ├── /book               Request a Time            [NEW — booking]
 │   └── /book/thanks    Request Received          [NEW]
@@ -33,7 +38,9 @@ pedicures, waxing).
 | Route | Purpose | Key content & components |
 | --- | --- | --- |
 | `/` | First impression, route visitors to booking | Hero + primary CTA "Request a Time"; intro; 3–4 featured services; testimonials strip (real quotes exist on current site); hours & location snapshot; persistent header/footer CTA to `/book`. |
-| `/services` | Full service menu with pricing | Groups: **Hair** (women's/men's cuts, styling, color) and **Esthetics** (pedicures, waxing). Bricks query loop over the `service` CPT, grouped by taxonomy, with price per service **[verify]**. Each row links to `/book/?service=…`. |
+| `/services` | Hub: full menu at a glance | Compact menu of all services with prices, grouped by category — Bricks query loop over the `service` CPT's group taxonomy. Group headers link to detail subpages; each row links to `/book/?service=…`. Prices **[verify]**. |
+| `/services/…` | Detail page per service group (×4) | One Bricks template, four term pages: `haircuts`, `color`, `styling`, `esthetics`. Each: intro copy, included services + prices + typical duration, before/after photos, short FAQ (2–3 questions), "Request a Time" CTA pre-filtered to that group. These carry the local SEO weight ("balayage [city]") — own title/meta each. |
+| `/about` | The studio's story; conversion warm-up | Owner's story and philosophy, studio photos, what a first visit is like. Links onward to `/team` and `/book`. If the owner wants it personal ("About [name]"), keep the `/about` slug and lead with the owner's bio. Angle **[verify]**. |
 | `/team` | Build trust; let clients pick a stylist | Bio cards from the `staff` CPT: photo, name, role (stylist / esthetician), specialties. "Book with [name]" → `/book/?stylist=…`. Roster **[verify]**. |
 | `/book` | **New:** booking request form | Fluent Forms request-a-time form (spec below) embedded in the Bricks template. Pre-fills service/stylist from query params. Expectation copy: "We'll confirm your appointment within one business day." |
 | `/book/thanks` | Confirmation state | Summary of the request, what happens next, phone number for urgent changes. Redirect target after successful submit. |
@@ -99,9 +106,14 @@ forms — send a test request end-to-end before launch.
 - **Plugin stack:** Bricks (builder) · ACF (custom fields) · Fluent Forms
   (booking + contact) · Rank Math or Yoast (sitemap.xml, robots, schema) ·
   WP Mail SMTP.
-- **CPTs:** `service` (group taxonomy, price, description, order), `staff`
-  (role, specialties, photo, bookable), `testimonial` (quote, client name).
-  Pages render them with Bricks query loops.
+- **CPTs:** `service` (group taxonomy, price, duration, description, order),
+  `staff` (role, specialties, photo, bookable), `testimonial` (quote, client
+  name). Pages render them with Bricks query loops.
+- **Service subpages:** one Bricks *taxonomy term* template renders all four
+  `/services/<group>` pages — intro copy, photos, and FAQ live as ACF fields on
+  the term, so adding a fifth group later is content work, not a new build.
+  Register the taxonomy with `rewrite: services/` so term URLs nest under the
+  hub. Services becomes a header dropdown listing the four groups.
 - **Bricks templates:** global header (persistent "Request a Time" CTA) and
   footer; 404 template; hours & contact info in an ACF options page so footer,
   `/contact`, and schema all read one source.
@@ -112,7 +124,10 @@ forms — send a test request end-to-end before launch.
 
 **Needed from the owner**
 
-- Final service menu with prices; staff names, roles, photos, bios.
+- Final service menu with prices & durations; staff names, roles, photos, bios.
+- About-page material: the studio's story or owner's bio (and whether it should
+  read "About the Studio" or "About [name]"); per-service-group photos and 2–3
+  FAQ answers each.
 - Confirmed address, phone, email, weekly hours (drives the date picker's
   closed days).
 - Inbox that receives booking requests, and who replies to them.
