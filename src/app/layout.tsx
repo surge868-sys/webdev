@@ -1,29 +1,27 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import { Oswald } from 'next/font/google';
+import './globals.css';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const oswald = Oswald({ variable: '--font-hud', subsets: ['latin'], weight: ['400', '700'] });
 
 export const metadata: Metadata = {
-  title: "webdev",
-  description: "Web development playground",
+  title: 'CLEARANCE 3D — haul the load, miss the overpass',
+  description: 'A one-thumb browser game about hauling an oversized load into a prairie city without smashing it into an overpass.',
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#0b6b3a',
+};
+
+export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${oswald.variable} h-full antialiased`}>
+      <body className="h-full overflow-hidden bg-[#6ea7dd]">{children}</body>
     </html>
   );
 }

@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader'] });
+const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+const errs = []; p.on('pageerror', e => errs.push(String(e)));
+const t0 = Date.now();
+await p.goto('http://localhost:3123/');
+await p.waitForFunction(() => typeof window.__game === 'function');
+console.log('game ready after ms', Date.now() - t0);
+await p.waitForTimeout(800);
+await p.screenshot({ path: 'verify/06-next-route.png' });
+await p.evaluate(() => window.__gameInput('start'));
+await p.waitForTimeout(1500);
+console.log(JSON.stringify(await p.evaluate(() => { const s = window.__game(); return { phase: s.phase, dist: s.dist|0, bridges: s.bridges.length }; })), 'errors', errs);
+await b.close();
