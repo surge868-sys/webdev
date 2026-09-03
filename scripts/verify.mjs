@@ -34,7 +34,7 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
   const nb = s.bridges[0];
   if (nb) {
     const gap = nb.w - s.dist; // metres from truck origin to the near face
-    const hRest = s.loadH, hLow = s.loadH;
+    const hRest = s.loadH, hLow = s.loadH - 0.3;
     // choose lane: prefer fit at resting height (tightest fit for shave), else duckable
     let best = -1, bestScore = -1e9;
     const blocked = (i) => s.traffic.some((t) => t.lane === i && t.w + t.len > s.dist && t.w < s.dist + 140);
@@ -42,7 +42,7 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
       const c = nb.clears[i];
       let sc;
       if (c >= hRest + 0.12) sc = 100 - (c - hRest); // fits at cruise: prefer tightest
-      else if (c >= hRest + 0.01) sc = 50 + (c - hLow); // graze: brake to steady
+      else if (c >= hLow + 0.03) sc = 50 + (c - hLow); // duckable: hold to lower and steady
       else sc = -100;
       sc -= Math.abs(i - s.lane) * 0.5; // small bias to stay put
       if (blocked(i)) sc -= 80; // slow vehicle ahead in that lane
@@ -55,9 +55,9 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
     const laneNow = best === s.lane ? best : s.lane;
     // graze lane: brake early enough for the sway to die before the deck, hold until the truss clears
     const needSteady = nb.clears[laneNow] < hRest + 0.12;
-    const under = gap < 30 + s.speed * 0.8 && gap + nb.depth + 14 > 0;
+    const under = gap < 12 + s.speed * 0.5 && gap + nb.depth + 14 > 0;
     const want = needSteady && under;
-    if (want && !holdActive) { await input('brake'); holdActive = true; holds++; }
+    if (want && !holdActive) { await input('hold'); holdActive = true; holds++; }
     if (!want && holdActive) { await input('release'); holdActive = false; }
     if (!approachShot && gap < 60 && gap > 45 && s.cleared >= 2) {
       await page.screenshot({ path: `${out}/02-approach.png` });

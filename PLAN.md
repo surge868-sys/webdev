@@ -59,8 +59,24 @@ Along the truck's forward axis (−Z), measured in metres ahead of the origin:
   `dist + 1.7 < b.z + depth` and `dist + 10.3 > b.z`.
 - Effective top `hEff = loadH + swayLift + gustLift + potholeBounce`, where `swayLift = 1.6·|sin θ|` and θ is
   the load's roll from a driven oscillator (k=4, c=0.55; braking c=4.5; speed² and hammer-down excite it;
-  lane changes kick it). **There are no hydraulics.** Verbs: swipe lane · hold to BRAKE (0.45× speed, steadies
-  the load, waypoint clock punishes it) · swipe ▼ HAMMER DOWN (1.35× speed, 2× score, 2.2× sway).
+  lane changes kick it). Verbs: swipe lane · HOLD to lower the load 0.30 m on the hydraulics (air tank 4.2 s
+  drain / 5.0 s refill / relock at 20%; a lowered load is also a steady load) · swipe ▼ HAMMER DOWN
+  (1.35× speed, 2× score, 2.2× sway). Effective top = loadH − lowered + swayLift + gust + pothole.
+
+## Loads (the 2026 Saskatoon strikes, in order of stupidity)
+
+| # | load | top | span (m ahead of trailer rear) | source |
+|---|---|---|---|---|
+| 0 | steel truss (tutorial) | 4.30 | 1.0 – 13.5 | the reference photo |
+| 1 | grain bin | 4.60 | 4.5 – 9.5 | 51st St / Idylwyld, Jul 24 |
+| 2 | track hoe, boom half-down | 4.75 | 1.5 – 10.5 | Circle Dr / Hwy 11, Mar 5 (posted 4.7 m) |
+| 3 | air seeder, wings up | 4.95 | 1.0 – 13.0 | Borden Bridge rail bridge, Sep 2 (ag equipment) |
+| 4 | second excavator, boom "mostly down" | 5.10 | 1.5 – 10.5 | 108th St, Mar 11 |
+| 5 | combine header | 5.30 | 1.0 – 12.5 | McKercher / CPKC, Mar 22 (heavy equipment) |
+
+Upgrades at 400 m then every 1600 m, deferred while any uncleared bridge is within 60 m; bridges beyond
+230 m regenerate for the new height, bridges in view get one lane bumped to survivable if none was.
+Fail card shows a city repair estimate (real figures: $283k, $350k) and the $11,200 fine.
 - Under deck: `hEff > lane.clear` → BRIDGE STRIKE. `|laneX − laneCentre| > 0` with the load's
   half-width (1.3 m) crossing a pier line (x = ±1.9) → PIER STRIKE. Piers are 0.5 m wide, so
   the strike condition is `|laneX| + 1.3 > 1.9 − 0.25` i.e. `|laneX| > 0.35` while under a

@@ -18,7 +18,15 @@ const LOAD_Z0 = 1.0; // collision span, metres ahead of the truck origin (traile
 const LOAD_Z1 = 13.5;
 const BED_H = 1.35;
 const LANE_LERP = 5;
-const BRAKE_FACTOR = 0.45;
+const DUCK_MAX = 0.3; // hydraulics drop (m) — "a little bit"
+const DUCK_SPEED = DUCK_MAX / 0.2;
+const SPRING_K = 8;
+const SPRING_C = 5;
+const AIR_DRAIN = 1 / 4.2;
+const AIR_REFILL = 1 / 5.0;
+const AIR_RELOCK = 0.2;
+const UPGRADE_FIRST = 400;
+const UPGRADE_EVERY = 1600;
 const HAMMER_SPEED = 1.35;
 const HAMMER_SCORE = 2;
 const BASE_SPEED = 16;
@@ -35,7 +43,7 @@ const NIGHT_KM = 3.2;
 // sway oscillator
 const SWAY_K = 4;
 const SWAY_C = 0.55;
-const SWAY_C_BRAKE = 4.5;
+const SWAY_C_LOW = 4.5; // lowered load = low centre of gravity = steady
 const SWAY_A = 0.036;
 const SWAY_HAMMER = 2.2;
 const SWAY_ARM = 1.6;
@@ -52,7 +60,7 @@ const WAYPOINTS = [
   ['MARQUIS INDUSTRIAL', 1200], ['THE GRAIN TERMINAL', 1400],
 ] as const;
 const DISPATCH = [
-  { id: 'nobrake', text: 'Clear 4 bridges without braking', goal: 4 },
+  { id: 'nobrake', text: 'Clear 4 bridges without ducking', goal: 4 },
   { id: 'shave3', text: '3 close shaves in a row', goal: 3 },
   { id: 'hammer2', text: 'Hammer down under 2 bridges', goal: 2 },
   { id: 'clear8', text: 'Clear 8 bridges', goal: 8 },
@@ -259,20 +267,20 @@ void main(){
 }`;
 
 // ───────────────────────────── types ─────────────────────────────
-type Verdict = 'fit' | 'steady' | 'no';
+type Verdict = 'fit' | 'duck' | 'no';
 interface Lane { clear: number; deck: THREE.Group; plate: THREE.Mesh; lamp: THREE.Mesh; board: THREE.Mesh; verdict: Verdict }
 interface Bridge {
   id: number; w: number; depth: number; kind: 'girder' | 'steel' | 'rail'; name: string; lanes: Lane[];
   group: THREE.Group; piers: THREE.Mesh[]; abut: THREE.Mesh[]; cleared: boolean; minMargin: number; active: boolean;
-  faceHidden: boolean; brakedUnder: boolean; hammeredUnder: boolean;
+  faceHidden: boolean; duckedUnder: boolean; hammeredUnder: boolean;
 }
 interface Chunk { m: THREE.Mesh; v: THREE.Vector3; av: THREE.Vector3 }
 interface Inst { w: number; x: number; s: number; rot: number; span: number }
 type Phase = 'title' | 'run' | 'crash' | 'fail';
 
 export interface GameSnapshot {
-  phase: Phase; dist: number; speed: number; hammer: boolean; brake: boolean; mult: number; score: number;
-  lane: number; laneX: number; loadH: number; sway: number; lift: number; hEff: number; cleared: number; shaveChain: number;
+  phase: Phase; dist: number; speed: number; hammer: boolean; hold: boolean; lowered: number; air: number; airLocked: boolean; mult: number; score: number;
+  lane: number; laneX: number; loadH: number; loadName: string; sway: number; lift: number; hEff: number; cleared: number; shaveChain: number;
   crashKind: string | null; tod: number; waypoint: { name: string; remaining: number; clock: number } | null;
   dispatch: { text: string; progress: number; goal: number } | null;
   bridges: { w: number; depth: number; kind: string; name: string; clears: number[]; verdicts: Verdict[] }[];
@@ -303,8 +311,8 @@ const CSS = `
 .c3-chip .h{font-size:18px;letter-spacing:.04em;line-height:1.1}
 .c3-chip .v{font-size:9px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin-top:1px}
 .c3-chip .bar{height:3px;margin-top:4px;background:rgba(239,230,211,.3);border-radius:2px}
-.c3-chip.fit .bar{background:#5fd68a}.c3-chip.steady .bar{background:#f2b32a}.c3-chip.no .bar{background:#e0463a}
-.c3-chip.fit .v{color:#8ff0b0}.c3-chip.steady .v{color:#ffd27a}.c3-chip.no .v{color:#ff8a80}
+.c3-chip.fit .bar{background:#5fd68a}.c3-chip.duck .bar{background:#f2b32a}.c3-chip.no .bar{background:#e0463a}
+.c3-chip.fit .v{color:#8ff0b0}.c3-chip.duck .v{color:#ffd27a}.c3-chip.no .v{color:#ff8a80}
 .c3-chip.cur .h{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
 .c3-chip.off{opacity:.35}
 .c3-bl{position:absolute;left:16px;bottom:max(18px,env(safe-area-inset-bottom));width:150px}
@@ -312,6 +320,9 @@ const CSS = `
 .c3-bl .sp small{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
 .c3-bl .mode{font-size:12px;letter-spacing:.26em;text-transform:uppercase;font-weight:600;margin-top:4px;min-height:14px}
 .c3-bl .mode.hammer{color:#f0a05a}.c3-bl .mode.brake{color:#8fd0ff}
+.c3-bl .air{height:4px;background:rgba(239,230,211,.25);margin-top:3px;width:150px}
+.c3-bl .air i{display:block;height:100%;background:#8fd0ff;transform-origin:left}
+.c3-bl .air.low i{background:#f2b32a}.c3-bl .air.lock i{background:#e0463a}
 .c3-bl .disp{font-size:11px;letter-spacing:.12em;opacity:.75;margin-top:6px;line-height:1.3;min-height:14px}
 .c3-br{position:absolute;right:16px;bottom:max(18px,env(safe-area-inset-bottom));width:190px;text-align:right}
 .c3-br .sc{font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
@@ -365,20 +376,20 @@ const HUD_HTML = `
     <div class="c3-chip" id="c3-chip1"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
     <div class="c3-chip" id="c3-chip2"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
   </div>
-  <div class="c3-bl"><div class="c3-lbl">Speed</div><div class="c3-rule"></div><div class="sp"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div><div class="disp" id="c3-disp"></div></div>
+  <div class="c3-bl"><div class="c3-lbl">Speed</div><div class="c3-rule"></div><div class="sp"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div><div class="c3-lbl" style="margin-top:6px">Air</div><div class="air" id="c3-air"><i id="c3-airbar"></i></div><div class="disp" id="c3-disp"></div></div>
   <div class="c3-br"><div class="c3-lbl">Distance made good</div><div class="c3-rule"></div><div class="sc"><span id="c3-km">0.00</span><small>km</small></div>
     <div class="row"><span>Load</span><span id="c3-h">4.30 m</span></div><div class="row mult" id="c3-mult"></div></div>
   <div class="c3-btn" id="c3-left">◀</div><div class="c3-btn" id="c3-right">▶</div>
-  <div class="c3-hint" id="c3-hint">Swipe to change lane · Hold to brake · Swipe down to hammer</div>
+  <div class="c3-hint" id="c3-hint">Swipe to change lane · Hold to lower the load · Swipe down to hammer</div>
   <div class="c3-banner" id="c3-banner"><div class="a"></div><div class="b"></div></div>
 </div>
 <div class="c3-flash" id="c3-flash"></div>
 <div class="c3-title" id="c3-title">
   <div class="eb">Saskatoon · Circle Drive approach</div>
   <div class="lg">Clearance</div>
-  <div class="sub">One steel truss. Eleven overpasses. No permit.</div>
+  <div class="sub">Two excavators, a grain bin and no permit. Based on a true year.</div>
   <div class="tap">Tap to haul</div>
-  <div class="keys">Swipe ◀ ▶ lane · hold to brake · swipe ▼ hammer down<br>Keys ← → · Space · S · C view · M sound</div>
+  <div class="keys">Swipe ◀ ▶ lane · hold to lower the load · swipe ▼ hammer down<br>Keys ← → · Space · S · C view · M sound</div>
   <div class="gc" id="c3-best"></div>
 </div>
 <div class="c3-card" id="c3-card"><div class="c3-panel">
@@ -386,6 +397,7 @@ const HUD_HTML = `
   <div class="rows">
     <div><span>Hauled</span><b id="c3-fkm">0.00 km</b></div><div><span>Top multiplier</span><b id="c3-fmult">×1</b></div>
     <div><span>Bridges cleared</span><b id="c3-fcl">0</b></div><div><span>Best</span><b id="c3-fbest">0.00 km</b></div>
+    <div><span>City repair estimate</span><b id="c3-frep">$0</b></div><div><span>Your fine</span><b id="c3-ffine">$0</b></div>
   </div>
   <div class="go" id="c3-restart">Haul again</div>
 </div></div>`;
@@ -414,10 +426,10 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   const $ = (id: string) => wrap.querySelector<HTMLElement>('#' + id)!;
   const el = {
     hud: $('c3-hud'), wpn: $('c3-wpn'), wpt: $('c3-wpt'), view: $('c3-view'), chips: [$('c3-chip0'), $('c3-chip1'), $('c3-chip2')],
-    disp: $('c3-disp'), snd: $('c3-snd'), sp: $('c3-sp'), mode: $('c3-mode'), km: $('c3-km'), h: $('c3-h'), cl: $('c3-cl'), mult: $('c3-mult'),
+    disp: $('c3-disp'), snd: $('c3-snd'), sp: $('c3-sp'), air: $('c3-air'), airbar: $('c3-airbar'), mode: $('c3-mode'), km: $('c3-km'), h: $('c3-h'), cl: $('c3-cl'), mult: $('c3-mult'),
     left: $('c3-left'), right: $('c3-right'), hint: $('c3-hint'), banner: $('c3-banner'), flash: $('c3-flash'),
     title: $('c3-title'), best: $('c3-best'), card: $('c3-card'), kind: $('c3-kind'), bname: $('c3-bname'), fkm: $('c3-fkm'),
-    fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), restart: $('c3-restart'),
+    fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), frep: $('c3-frep'), ffine: $('c3-ffine'), restart: $('c3-restart'),
   };
 
   const scene = new THREE.Scene();
@@ -794,45 +806,111 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── the load: galvanized steel truss (a bridge girder, of course) ───
   const loadG = new THREE.Group();
   truck.add(loadG);
-  const TRUSS_L = LOAD_Z1 - LOAD_Z0, TRUSS_H = 4.3 - BED_H - 0.1, TRUSS_W = LOAD_HALF_W * 2 - 0.3;
-  const trussGeo = new THREE.BoxGeometry(1, 1, 1);
-  const trussMembers: THREE.Matrix4[] = [];
-  const member = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, t = 0.16) => {
-    const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz);
-    const len = a.distanceTo(b);
-    const mid = a.clone().add(b).multiplyScalar(0.5);
-    const dir = b.clone().sub(a).normalize();
-    tmpQ.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    trussMembers.push(new THREE.Matrix4().compose(mid, tmpQ.clone(), new THREE.Vector3(t, len, t)));
-  };
-  {
-    const y0 = BED_H + 0.12, y1 = y0 + TRUSS_H, zA = -LOAD_Z0, zB = -LOAD_Z1;
-    const hw = TRUSS_W / 2;
+  // Loads are the loads that actually hit Saskatoon overpasses in 2026: excavators, a grain bin, farm equipment.
+  interface LoadDef { name: string; h: number; z0: number; z1: number; build: () => THREE.Group }
+  const memberGeo = new THREE.BoxGeometry(1, 1, 1);
+  function trussGroup(z0: number, z1: number, top: number, halfW: number): THREE.Group {
+    const g = new THREE.Group();
+    const ms: THREE.Matrix4[] = [];
+    const member = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, t = 0.16) => {
+      const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz);
+      const len = a.distanceTo(b), mid = a.clone().add(b).multiplyScalar(0.5), dir = b.clone().sub(a).normalize();
+      tmpQ.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      ms.push(new THREE.Matrix4().compose(mid, tmpQ.clone(), new THREE.Vector3(t, len, t)));
+    };
+    const y0 = BED_H + 0.12, y1 = top - 0.12, zA = -z0, zB = -z1, hw = halfW - 0.15, n = 8;
     for (const x of [-hw, hw]) {
-      member(x, y0, zA, x, y0, zB, 0.24); member(x, y1, zA, x, y1, zB, 0.24); // chords
-      const n = 8;
+      member(x, y0, zA, x, y0, zB, 0.24); member(x, y1, zA, x, y1, zB, 0.24);
       for (let i = 0; i <= n; i++) {
-        const z = zA + (zB - zA) * (i / n);
-        member(x, y0, z, x, y1, z, 0.14);
+        const z = zA + (zB - zA) * (i / n); member(x, y0, z, x, y1, z, 0.14);
         if (i < n) { const z2 = zA + (zB - zA) * ((i + 1) / n); if (i % 2 === 0) member(x, y0, z, x, y1, z2, 0.12); else member(x, y1, z, x, y0, z2, 0.12); }
       }
     }
-    // cross bracing top and bottom
-    for (let i = 0; i <= 8; i++) { const z = zA + (zB - zA) * (i / 8); member(-hw, y1, z, hw, y1, z, 0.12); member(-hw, y0, z, hw, y0, z, 0.14); }
-    for (let i = 0; i < 8; i++) { const z = zA + (zB - zA) * (i / 8), z2 = zA + (zB - zA) * ((i + 1) / 8); member(-hw, y1, z, hw, y1, z2, 0.09); }
+    for (let i = 0; i <= n; i++) { const z = zA + (zB - zA) * (i / n); member(-hw, y1, z, hw, y1, z, 0.12); member(-hw, y0, z, hw, y0, z, 0.14); }
+    for (let i = 0; i < n; i++) { const z = zA + (zB - zA) * (i / n), z2 = zA + (zB - zA) * ((i + 1) / n); member(-hw, y1, z, hw, y1, z2, 0.09); }
+    const im = new THREE.InstancedMesh(memberGeo, mat.galv, ms.length);
+    ms.forEach((m, i) => im.setMatrixAt(i, m)); im.castShadow = true; im.receiveShadow = true; g.add(im);
+    for (const z of [zA - 1.2, zB + 1.2]) for (const x of [-halfW + 0.1, halfW - 0.1]) {
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.35), mat.flag); f.position.set(x, top + 0.2, z); g.add(f);
+      cyl(0.03, 0.9, mat.galv, x, top - 0.2, z, 'y', g, 6);
+    }
+    return g;
   }
-  const truss = new THREE.InstancedMesh(trussGeo, mat.galv, trussMembers.length);
-  trussMembers.forEach((m, i) => truss.setMatrixAt(i, m));
-  truss.castShadow = true; truss.receiveShadow = true;
-  loadG.add(truss);
-  // chains, red flags on corners, amber load markers
-  for (const z of [-LOAD_Z0 - 1.2, -LOAD_Z1 + 1.2]) for (const x of [-LOAD_HALF_W + 0.1, LOAD_HALF_W - 0.1]) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.35), mat.flag);
-    f.position.set(x, 4.3 + 0.2, z); loadG.add(f);
-    cyl(0.03, 0.9, mat.galv, x, 4.3 - 0.2, z, 'y', loadG, 6);
+  const catYellow = new THREE.MeshStandardMaterial({ color: '#e8a21a', roughness: 0.55, metalness: 0.2 });
+  const catDark = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.9 });
+  const agRed = new THREE.MeshStandardMaterial({ color: '#b8261f', roughness: 0.5, metalness: 0.2 });
+  const agGreen = new THREE.MeshStandardMaterial({ color: '#2f7a2a', roughness: 0.5, metalness: 0.2 });
+  const corrug = new THREE.MeshStandardMaterial({ color: '#c9ccd0', roughness: 0.35, metalness: 0.85, envMapIntensity: 1.2 });
+  function excavatorGroup(top: number, z0: number, z1: number, boomDown: number): THREE.Group {
+    const g = new THREE.Group(); const y0 = BED_H; const zc = -(z0 + z1) / 2 + 1.0;
+    box(2.7, 0.6, 4.6, catDark, 0, y0 + 0.3, zc, g); // tracks
+    box(2.3, 1.2, 3.4, catYellow, 0, y0 + 1.2, zc, g); // house
+    box(1.3, 1.1, 1.5, catYellow, 0.55, y0 + 2.35, zc + 0.8, g); // cab
+    box(1.0, 0.7, 0.08, mat.glass, 0.55, y0 + 2.45, zc + 1.55, g, false);
+    box(0.9, 0.5, 1.2, catDark, -0.5, y0 + 2.0, zc + 1.3, g); // counterweight-ish engine hood
+    // boom rises forward from a pivot on the house; its knuckle is the load's true top
+    const px = -0.5, py = y0 + 1.7, pz = zc - 0.6, L = 4.6;
+    const th = Math.asin(clamp((top - 0.25 - py) / L, 0.15, 0.95));
+    const boom = box(0.6, 0.55, L, catYellow, px, py + (L / 2) * Math.sin(th), pz - (L / 2) * Math.cos(th), g); boom.rotation.x = th;
+    const tipY = py + L * Math.sin(th), tipZ = pz - L * Math.cos(th);
+    const Ls = 3.2, ph = 1.05 + boomDown * 0.4; // stick folds down and forward
+    const stick = box(0.45, 0.45, Ls, catYellow, px, tipY - (Ls / 2) * Math.sin(ph), tipZ - (Ls / 2) * Math.cos(ph), g); stick.rotation.x = -ph;
+    const bY = tipY - Ls * Math.sin(ph), bZ = tipZ - Ls * Math.cos(ph);
+    box(1.3, 0.8, 0.9, catDark, px, Math.max(y0 + 0.5, bY), bZ - 0.3, g); // bucket
+    box(0.5, 0.2, 0.7, mat.red, px, top - 0.1, tipZ, g, false); // knuckle marker at the posted height
+    cyl(0.12, 2.2, mat.chrome, px + 0.45, py + 1.2, pz - 1.4, 'z', g, 8); // hydraulic ram
+    return g;
   }
+  function grainBinGroup(top: number, z0: number, z1: number): THREE.Group {
+    const g = new THREE.Group(); const zc = -(z0 + z1) / 2; const r = 1.4; const wallH = (top - BED_H) * 0.72;
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(r, r, wallH, 28), corrug); wall.position.set(0, BED_H + wallH / 2, zc); wall.castShadow = true; g.add(wall);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(r + 0.05, top - BED_H - wallH, 28), corrug); roof.position.set(0, BED_H + wallH + (top - BED_H - wallH) / 2, zc); roof.castShadow = true; g.add(roof);
+    for (let i = 0; i < 5; i++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.02, 0.03, 6, 28), mat.galv); ring.rotation.x = Math.PI / 2; ring.position.set(0, BED_H + 0.3 + i * (wallH / 5), zc); g.add(ring); }
+    box(2.6, 0.2, 3.2, mat.frame, 0, BED_H + 0.1, zc, g); // cradle
+    return g;
+  }
+  function airSeederGroup(top: number, z0: number, z1: number): THREE.Group {
+    const g = new THREE.Group(); const zc = -(z0 + z1) / 2;
+    box(2.6, 0.35, 9.8, mat.frame, 0, BED_H + 0.45, zc, g); // main toolbar
+    // folded wings: two tall open frames of green tubes with shank rows
+    for (const x of [-1.2, 1.2]) {
+      for (const z of [zc - 4.6, zc - 1.5, zc + 1.5, zc + 4.6]) box(0.14, top - BED_H - 0.7, 0.14, agGreen, x, BED_H + 0.3 + (top - BED_H - 0.7) / 2, z, g);
+      for (const yy of [BED_H + 1.4, BED_H + 2.5, top - 0.5]) box(0.12, 0.12, 9.4, agGreen, x, yy, zc, g, false);
+      for (let i = 0; i < 14; i++) box(0.06, 0.9, 0.05, mat.galv, x + (x < 0 ? 0.25 : -0.25), BED_H + 1.9 + (i % 2) * 0.9, zc - 4.4 + i * 0.68, g, false);
+    }
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 3.2, 20), agGreen); tank.rotation.z = Math.PI / 2; tank.position.set(0, top - 1.05, zc + 1.9); tank.castShadow = true; g.add(tank);
+    const tank2 = tank.clone(); tank2.position.z = zc - 2.0; g.add(tank2);
+    box(0.5, 0.4, 0.5, mat.galv, 0, top - 0.2, zc + 1.9, g, false); // fill lid = true top
+    return g;
+  }
+  function combineHeaderGroup(top: number, z0: number, z1: number): THREE.Group {
+    const g = new THREE.Group(); const zc = -(z0 + z1) / 2;
+    box(2.8, 1.4, 10.0, agRed, 0, BED_H + 0.7, zc, g); // header body on its side
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 9.6, 12), mat.galv); reel.rotation.x = Math.PI / 2; reel.position.set(0.6, top - 0.6, zc); g.add(reel);
+    for (let i = 0; i < 6; i++) { const bat = box(0.1, top - BED_H - 1.5, 9.6, mat.galv, 0.6 + Math.cos(i) * 0.5, (top - 0.6 + BED_H + 1.4) / 2, zc, g, false); bat.rotation.z = i * 0.5; }
+    box(2.6, 0.5, 2.0, agRed, 0, top - 0.25, zc + 3.8, g); // feeder house
+    return g;
+  }
+  const LOADS: LoadDef[] = [
+    { name: 'Steel truss', h: 4.3, z0: 1.0, z1: 13.5, build: () => trussGroup(1.0, 13.5, 4.3, LOAD_HALF_W) },
+    { name: 'Grain bin', h: 4.6, z0: 4.5, z1: 9.5, build: () => grainBinGroup(4.6, 4.5, 9.5) },
+    { name: 'Track hoe, boom half-down', h: 4.75, z0: 1.5, z1: 10.5, build: () => excavatorGroup(4.75, 1.5, 10.5, 0.42) },
+    { name: 'Air seeder, wings up', h: 4.95, z0: 1.0, z1: 13.0, build: () => airSeederGroup(4.95, 1.0, 13.0) },
+    { name: 'Second excavator, boom "mostly down"', h: 5.1, z0: 1.5, z1: 10.5, build: () => excavatorGroup(5.1, 1.5, 10.5, 0.55) },
+    { name: 'Combine header', h: 5.3, z0: 1.0, z1: 12.5, build: () => combineHeaderGroup(5.3, 1.0, 12.5) },
+  ];
+  let loadMesh: THREE.Group | null = null;
   const loadMarkers: THREE.Mesh[] = [];
-  for (const z of [-LOAD_Z0 - 0.3, -LOAD_Z1 + 0.3]) for (const x of [-LOAD_HALF_W, LOAD_HALF_W]) loadMarkers.push(box(0.1, 0.1, 0.1, mat.amber, x, BED_H + 0.2, z, loadG, false));
+  function setLoad(i: number) {
+    G.loadIdx = i; G.loadH = LOADS[i].h; G.z0 = LOADS[i].z0; G.z1 = LOADS[i].z1;
+    if (loadMesh) loadG.remove(loadMesh);
+    loadMesh = LOADS[i].build();
+    loadG.add(loadMesh);
+    for (const m of loadMarkers) loadG.remove(m); loadMarkers.length = 0;
+    for (const z of [-G.z0 - 0.3, -G.z1 + 0.3]) for (const x of [-LOAD_HALF_W, LOAD_HALF_W]) loadMarkers.push(box(0.1, 0.1, 0.1, mat.amber, x, BED_H + 0.2, z, loadG, false));
+    el.h.textContent = `${LOADS[i].name} · ${LOADS[i].h.toFixed(2)} m`;
+  }
+
   // ─── traffic: half-tons and grain trucks in our lanes, oncoming on the far carriageway ───
   interface Vehicle { g: THREE.Group; w: number; x: number; v: number; len: number; kind: 'pickup' | 'grain'; lane: number; active: boolean; lights: THREE.Mesh[]; wheels: THREE.Mesh[] }
   const VEH_COLORS = ['#e8e6df', '#b9bec4', '#7a1f1a', '#2b4a7a', '#1b1c1e', '#4d6b3a', '#c8c2b0'];
@@ -848,18 +926,18 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = shadow; g.add(b); return b;
     };
     if (kind === 'pickup') {
-      B(1.95, 0.55, 5.4, paint, 0, 0.78, 0); // body
-      B(1.85, 0.62, 1.7, paint, 0, 1.36, 0.3); // cab
+      B(1.95, 0.55, 5.4, paint, 0, 0.78, 0);
+      B(1.85, 0.62, 1.7, paint, 0, 1.36, 0.3);
       B(1.75, 0.5, 1.3, mat.glass, 0, 1.4, 0.3, false);
-      B(1.9, 0.45, 2.3, paint, 0, 0.98, -1.5); // box walls
+      B(1.9, 0.45, 2.3, paint, 0, 0.98, -1.5);
       lights.push(B(0.35, 0.12, 0.05, headMat, -0.7, 0.85, 2.72, false), B(0.35, 0.12, 0.05, headMat, 0.7, 0.85, 2.72, false));
       lights.push(B(0.3, 0.14, 0.05, tailMat, -0.8, 0.9, -2.72, false), B(0.3, 0.14, 0.05, tailMat, 0.8, 0.9, -2.72, false));
       for (const z of [1.7, -1.7]) for (const x of [-0.85, 0.85]) { const w = new THREE.Mesh(vehWheelGeo, mat.rubber); w.position.set(x, 0.42, z); g.add(w); wheelsV.push(w); }
     } else {
-      B(2.4, 1.1, 2.3, paint, 0, 1.6, 2.6); // cab
+      B(2.4, 1.1, 2.3, paint, 0, 1.6, 2.6);
       B(2.3, 0.7, 0.06, mat.glass, 0, 1.85, 3.78, false);
-      B(2.2, 0.9, 1.4, paint, 0, 1.0, 4.1); // hood
-      B(2.5, 2.3, 6.2, paint, 0, 2.05, -1.5); // grain box
+      B(2.2, 0.9, 1.4, paint, 0, 1.0, 4.1);
+      B(2.5, 2.3, 6.2, paint, 0, 2.05, -1.5);
       B(2.55, 0.25, 6.3, mat.hazard, 0, 0.75, -1.5, false);
       B(1.2, 0.5, 8.5, mat.frame, 0, 0.55, 0.5);
       lights.push(B(0.32, 0.16, 0.05, headMat, -0.85, 1.0, 4.82, false), B(0.32, 0.16, 0.05, headMat, 0.85, 1.0, 4.82, false));
@@ -874,13 +952,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   const oncoming: Vehicle[] = [];
   for (let i = 0; i < 6; i++) traffic.push(makeVehicle(i % 3 === 0 ? 'grain' : 'pickup', VEH_COLORS[Math.floor(rngFx() * VEH_COLORS.length)]));
   for (let i = 0; i < 6; i++) oncoming.push(makeVehicle(i % 2 === 0 ? 'grain' : 'pickup', VEH_COLORS[Math.floor(rngFx() * VEH_COLORS.length)]));
-  for (const v of oncoming) v.g.rotation.y = Math.PI; // faces +z (toward the camera)
+  for (const v of oncoming) v.g.rotation.y = Math.PI;
   function nearBridge(w: number, before = 70, after = 30) {
     for (const b of bridges) if (b.active && w > b.w - before && w < b.w + b.depth + after) return true;
     return false;
   }
   function spawnTraffic() {
-    if (G.dist < 250) return; // clear road for the first two gimme bridges
+    if (G.dist < 250) return;
     const ahead = traffic.filter((v) => v.active);
     if (ahead.length >= 4) return;
     const v = traffic.find((t) => !t.active);
@@ -906,11 +984,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── bridges: concrete box girder on round piers · green plate girder · rail ballast deck ───
   const lampTex: Record<Verdict, THREE.Texture> = {
     fit: plateTex('FITS', '#1f8f3f', '#fff', 256, 128, 80, '#0d4a20'),
-    steady: plateTex('STEADY', '#f2b32a', '#111', 256, 128, 64, '#7a5a00'),
+    duck: plateTex('DUCK ▼', '#f2b32a', '#111', 256, 128, 72, '#7a5a00'),
     no: plateTex('✕', '#e2382f', '#fff', 256, 128, 96, '#6a1410'),
   };
   const lampMat: Record<Verdict, THREE.MeshBasicMaterial> = {
-    fit: new THREE.MeshBasicMaterial({ map: lampTex.fit }), steady: new THREE.MeshBasicMaterial({ map: lampTex.steady }), no: new THREE.MeshBasicMaterial({ map: lampTex.no }),
+    fit: new THREE.MeshBasicMaterial({ map: lampTex.fit }), duck: new THREE.MeshBasicMaterial({ map: lampTex.duck }), no: new THREE.MeshBasicMaterial({ map: lampTex.no }),
   };
   const plateCache = new Map<string, THREE.MeshBasicMaterial>();
   const plateMatFor = (clear: number) => {
@@ -959,7 +1037,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     // the deck continues over the median and the oncoming carriageway (no plates there)
     const ext = new THREE.Mesh(railTieGeo, mat.concrete); ext.name = 'ext'; ext.castShadow = true; ext.receiveShadow = true; group.add(ext);
     for (let i = 0; i < 2; i++) { const p = new THREE.Mesh(new THREE.CylinderGeometry(PIER_R, PIER_R * 1.15, 1, 18), mat.concrete); p.name = 'extpier' + i; p.castShadow = true; group.add(p); }
-    return { id: 0, w: 0, depth: 10, kind: 'girder', name: '', lanes, group, piers, abut, cleared: false, minMargin: 9, active: false, faceHidden: false, brakedUnder: false, hammeredUnder: false };
+    return { id: 0, w: 0, depth: 10, kind: 'girder', name: '', lanes, group, piers, abut, cleared: false, minMargin: 9, active: false, faceHidden: false, duckedUnder: false, hammeredUnder: false };
   }
   for (let i = 0; i < 8; i++) bridges.push(makeBridge());
   function layoutBridge(b: Bridge) {
@@ -1066,10 +1144,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     audio.engG!.gain.setTargetAtTime(running ? 0.16 + rpm * 0.1 : 0.08, t, 0.2);
     audio.turbo!.frequency.setTargetAtTime(600 + rpm * 1900 * (G.hammer ? 1.2 : 1), t, 0.3);
     audio.turboG!.gain.setTargetAtTime(running ? 0.012 * rpm * (G.hammer ? 2 : 1) : 0, t, 0.3);
-    const jake = running && G.brake;
-    audio.jakeG!.gain.setTargetAtTime(jake ? 0.35 : 0, t, 0.05);
-    if (audio.brakeWas && !G.brake) { audio.hissG!.gain.setValueAtTime(0.25, t); audio.hissG!.gain.setTargetAtTime(0, t + 0.05, 0.25); }
-    audio.brakeWas = G.brake;
+    const ducking = running && G.hold && !G.airLocked;
+    audio.jakeG!.gain.setTargetAtTime(ducking ? 0.12 : 0, t, 0.05);
+    audio.hissG!.gain.setTargetAtTime(ducking ? 0.08 : 0, t, 0.05);
+    if (audio.brakeWas && !G.hold) { audio.hissG!.gain.setValueAtTime(0.25, t); audio.hissG!.gain.setTargetAtTime(0, t + 0.05, 0.25); }
+    audio.brakeWas = G.hold;
   }
   function sfx(kind: 'shave' | 'crash' | 'lane' | 'stamp') {
     if (!audio.on || !audio.ctx) return;
@@ -1092,30 +1171,33 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
 
   // ─── state ───
   const G = {
-    phase: 'title' as Phase, dist: 0, speed: 0, brake: false, brakeF: 1, hammer: false, mult: 1, score: 0,
-    lane: 1, laneX: 0, loadH: 4.3, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
+    phase: 'title' as Phase, dist: 0, speed: 0, hold: false, lowered: 0, lowerVel: 0, air: 1, airLocked: false, hammer: false, mult: 1, score: 0,
+    lane: 1, laneX: 0, loadH: 4.3, loadIdx: 0, z0: LOAD_Z0, z1: LOAD_Z1, nextUpgrade: UPGRADE_FIRST, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
     cleared: 0, shaveChain: 0, shaveUntil: -1, shaveRun: 0, topMult: 1, bridgeCount: 0, nextW: FIRST_BRIDGE,
     wpIdx: 0, wpW: 0, wpDeadline: 0, wpClock: 0, dispIdx: 0, dispProg: 0, bonusKm: 0,
     crashKind: null as string | null, crashBridge: '', crashT: 0, crashPt: new THREE.Vector3(), shake: 0, time: 0, best: 0, tod: 0,
   };
   try { G.best = parseFloat(localStorage.getItem('clr3d.best') || '0') || 0; } catch { /* private mode */ }
   const lift = () => SWAY_ARM * Math.abs(Math.sin(G.sway));
-  const hEff = () => G.loadH + lift() + G.gustLift + G.potholeBounce;
-  const hSteady = () => G.loadH + G.gustLift + G.potholeBounce;
+  const hEff = () => G.loadH - G.lowered + lift() + G.gustLift + G.potholeBounce;
+  const hMin = () => G.loadH - DUCK_MAX + G.gustLift + G.potholeBounce; // fully lowered and steady
 
-  // ─── clearance generation (relative to the load's steady height h; posted in 0.05 m steps) ───
-  // No hydraulics in this build: "graze" fits only with a steady load, "easy" always fits, decoys never.
+  // ─── clearance generation (relative to the load's resting height h; posted in 0.05 m steps) ───
+  // graze: fits untouched by <10 cm (the greed tier) · easy · tight: partial duck · max: near-full duck
   function solutionClear(h: number): number {
+    const tutorial = G.loadIdx === 0 && G.dist < UPGRADE_FIRST;
     const r = rngWorld();
-    if (r < 0.45) return step05(h + 0.03 + rngWorld() * 0.05 + 0.001); // graze: brake to steady the load
-    return step05(h + 0.15 + rngWorld() * 0.25); // easy
+    if (r < 0.3 || (tutorial && r < 0.6)) return step05(h + 0.03 + rngWorld() * 0.05 + 0.001);
+    if (r < 0.6 || tutorial) return step05(h + 0.15 + rngWorld() * 0.25);
+    if (r < 0.85) return step05(h - (DUCK_MAX - 0.1) + rngWorld() * (DUCK_MAX - 0.15)); // tight
+    return step05(h - DUCK_MAX + 0.02 + rngWorld() * 0.08); // max
   }
   function decoyClear(h: number): number {
-    return rngWorld() < 0.45 ? step05(h + 0.03 + 0.001) : step05(h - 0.85 + rngWorld() * 0.3); // a second graze lane, or hopeless
+    return rngWorld() < 0.45 ? step05(h - (DUCK_MAX - 0.1) + rngWorld() * (DUCK_MAX - 0.15)) : step05(h - 0.85 + rngWorld() * 0.3);
   }
   function spawnBridge(b: Bridge, w: number, idx: number) {
     b.id = ++bridgeSeq; b.w = w; b.depth = 9 + rngWorld() * 5; b.cleared = false; b.minMargin = 9; b.active = true; b.faceHidden = false;
-    b.brakedUnder = false; b.hammeredUnder = false;
+    b.duckedUnder = false; b.hammeredUnder = false;
     const isRail = idx % 3 === 2 && idx > 1;
     b.kind = isRail ? 'rail' : rngWorld() < 0.55 ? 'girder' : 'steel';
     b.name = isRail ? RAIL_NAME : BRIDGE_NAMES[Math.floor(rngWorld() * BRIDGE_NAMES.length)];
@@ -1123,9 +1205,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     if (idx < 2) { const c = idx === 0 ? step05(h + 0.25) : step05(h + 0.2); for (const L of b.lanes) L.clear = c; }
     else if (isRail) { const c = solutionClear(h); for (const L of b.lanes) L.clear = c; }
     else { const sol = Math.floor(rngWorld() * 3); for (let i = 0; i < 3; i++) b.lanes[i].clear = i === sol ? solutionClear(h) : decoyClear(h); }
-    if (!b.lanes.some((L) => L.clear >= h + 0.02)) b.lanes[Math.floor(rngWorld() * 3)].clear = step05(h + 0.05);
+    if (!b.lanes.some((L) => L.clear >= h - DUCK_MAX + 0.04)) b.lanes[Math.floor(rngWorld() * 3)].clear = step05(h + 0.05);
     layoutBridge(b);
-    updateVerdicts(b, hSteady(), hSteady());
+    updateVerdicts(b, G.loadH, G.loadH - DUCK_MAX);
   }
   const spacing = () => Math.max(78, 108 + rngWorld() * 55 - 0.015 * G.dist);
   function fillBridges() {
@@ -1143,7 +1225,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   }
   function updateVerdicts(b: Bridge, hNow: number, hLow: number) {
     for (const L of b.lanes) {
-      const v: Verdict = L.clear >= hNow ? 'fit' : L.clear >= hLow ? 'steady' : 'no';
+      const v: Verdict = L.clear >= hNow ? 'fit' : L.clear >= hLow ? 'duck' : 'no';
       if (v !== L.verdict) { L.verdict = v; L.lamp.material = lampMat[v]; }
     }
   }
@@ -1160,7 +1242,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
 
   // ─── run control ───
   function resetRun() {
-    G.dist = 0; G.speed = BASE_SPEED; G.brake = false; G.brakeF = 1; G.hammer = false; G.mult = 1; G.score = 0;
+    G.dist = 0; G.speed = BASE_SPEED; G.hold = false; G.lowered = 0; G.lowerVel = 0; G.air = 1; G.airLocked = false; G.hammer = false; G.mult = 1; G.score = 0;
+    G.loadIdx = 0; G.nextUpgrade = UPGRADE_FIRST; setLoad(0);
     G.lane = 1; G.laneX = 0; G.sway = 0; G.swayV = 0; G.swayPh = rngFx() * 6; G.gustLift = 0; G.potholeBounce = 0;
     G.cleared = 0; G.shaveChain = 0; G.shaveUntil = -1; G.shaveRun = 0; G.topMult = 1; G.bonusKm = 0;
     G.crashKind = null; G.crashBridge = ''; G.crashT = 0; G.shake = 0; G.tod = 0; G.dispIdx = 0; G.dispProg = 0;
@@ -1184,7 +1267,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     setTimeout(() => (el.hint.style.opacity = '0'), 7000);
   }
   function crash(kind: 'BRIDGE STRIKE' | 'PIER STRIKE' | 'COLLISION', b: Bridge | null, point: THREE.Vector3, label = '') {
-    G.phase = 'crash'; G.crashKind = kind; G.crashBridge = b ? b.name : label; G.crashT = 0; G.crashPt.copy(point); G.brake = false;
+    G.phase = 'crash'; G.crashKind = kind; G.crashBridge = b ? b.name : label; G.crashT = 0; G.crashPt.copy(point); G.hold = false;
     if (G.score > G.best) { G.best = G.score; try { localStorage.setItem('clr3d.best', String(G.best)); } catch { /* ignore */ } }
     if (reduceMotion) { showFail(); return; }
     loadG.visible = false;
@@ -1205,6 +1288,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     el.bname.textContent = G.crashBridge;
     el.fkm.textContent = G.score.toFixed(2) + ' km'; el.fmult.textContent = '×' + G.topMult;
     el.fcl.textContent = String(G.cleared); el.fbest.textContent = G.best.toFixed(2) + ' km';
+    // the 2026 strikes ran $283k and $350k in repairs; the driver's fine was $11,200
+    const repair = G.crashKind === 'COLLISION' ? 18000 + G.speed * 900 : 180000 + G.speed * 5200 + (G.loadH - 4.3) * 90000;
+    el.frep.textContent = '$' + Math.round(repair / 1000) + ',000'; el.ffine.textContent = G.crashKind === 'COLLISION' ? '$580' : '$11,200';
     el.card.classList.add('show');
   }
   let bannerTimer = 0;
@@ -1218,7 +1304,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   }
   function dispatchTick(ev: 'clear' | 'shave' | 'noshave', b?: Bridge) {
     const d = DISPATCH[G.dispIdx % DISPATCH.length];
-    if (d.id === 'nobrake' && ev === 'clear') G.dispProg = b && b.brakedUnder ? 0 : G.dispProg + 1;
+    if (d.id === 'nobrake' && ev === 'clear') G.dispProg = b && b.duckedUnder ? 0 : G.dispProg + 1;
     if (d.id === 'shave3') { if (ev === 'shave') G.dispProg++; else if (ev === 'noshave') G.dispProg = 0; }
     if (d.id === 'hammer2' && ev === 'clear' && b && b.hammeredUnder) G.dispProg++;
     if (d.id === 'clear8' && ev === 'clear') G.dispProg++;
@@ -1232,10 +1318,44 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── simulation ───
   function simulate(dt: number) {
     const base = Math.min(SPEED_CAP, BASE_SPEED + SPEED_PER_M * G.dist);
-    const targetF = G.brake ? BRAKE_FACTOR : 1;
-    G.brakeF += (targetF - G.brakeF) * Math.min(1, (G.brake ? 2.2 : 1.1) * dt);
-    G.speed = base * G.brakeF * (G.hammer ? HAMMER_SPEED : 1);
+    G.speed = base * (G.hammer ? HAMMER_SPEED : 1);
     G.dist += G.speed * dt;
+    // air + hydraulics
+    if (G.hold && !G.airLocked) { G.air -= AIR_DRAIN * dt; if (G.air <= 0) { G.air = 0; G.airLocked = true; } }
+    else { G.air = Math.min(1, G.air + AIR_REFILL * dt); if (G.airLocked && G.air >= AIR_RELOCK) G.airLocked = false; }
+    const ducking = G.hold && !G.airLocked;
+    if (ducking) { G.lowered = Math.min(DUCK_MAX, G.lowered + DUCK_SPEED * dt); G.lowerVel = 0; }
+    else if (G.lowered !== 0 || G.lowerVel !== 0) {
+      const acc = -SPRING_K * G.lowered - SPRING_C * G.lowerVel;
+      G.lowerVel += acc * dt; G.lowered += G.lowerVel * dt;
+      if (Math.abs(G.lowered) < 0.002 && Math.abs(G.lowerVel) < 0.01) { G.lowered = 0; G.lowerVel = 0; }
+    }
+    // load upgrades: never while under or within 60 m of an uncleared bridge
+    if (G.dist >= G.nextUpgrade && G.loadIdx < LOADS.length - 1) {
+      const near = bridges.some((b) => b.active && !b.cleared && b.w - 60 < G.dist + G.z1 && b.w + b.depth + 5 > G.dist);
+      if (!near) {
+        setLoad(G.loadIdx + 1);
+        G.nextUpgrade = G.dist + UPGRADE_EVERY;
+        // regenerate every bridge not yet in view for the new height; bridges already in view keep their
+        // plates but must still offer one survivable lane for the taller load
+        for (const b of bridges) {
+          if (!b.active || b.cleared) continue;
+          if (b.w > G.dist + LOOK_AHEAD) { b.active = false; b.group.visible = false; continue; }
+          if (!b.lanes.some((L) => L.clear >= G.loadH - DUCK_MAX + 0.04)) {
+            const best = b.lanes.reduce((m, L) => (L.clear > m.clear ? L : m), b.lanes[0]);
+            const c = step05(G.loadH + 0.05 + rngWorld() * 0.1);
+            if (b.kind === 'rail') for (const L of b.lanes) L.clear = c; else best.clear = c;
+            layoutBridge(b); updateVerdicts(b, G.loadH, G.loadH - DUCK_MAX);
+          }
+        }
+        const last = bridges.filter((b) => b.active).reduce((m, b) => Math.max(m, b.w + b.depth), G.dist);
+        G.nextW = Math.max(G.nextW - 1e9, last + spacing());
+        G.bridgeCount = Math.max(G.bridgeCount, 3);
+        fillBridges();
+        banner(LOADS[G.loadIdx].name, `New load · ${LOADS[G.loadIdx].h.toFixed(2)} m · ${LOADS[G.loadIdx].h > 4.15 ? 'permit required (you did not obtain this)' : 'approved'}`, LOADS[G.loadIdx].h > 4.15, 2600);
+        sfx('stamp');
+      }
+    }
     G.tod = clamp(G.dist / (NIGHT_KM * 1000), 0, 1);
     // multiplier / score
     const chainMult = G.shaveChain > 0 && G.dist < G.shaveUntil ? SHAVE_CHAIN[Math.min(G.shaveChain, SHAVE_CHAIN.length) - 1] : 1;
@@ -1252,7 +1372,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     const sf = (G.speed / BASE_SPEED) ** 2 * (G.hammer ? SWAY_HAMMER : 1);
     G.swayPh += dt;
     const ex = SWAY_A * sf * (Math.sin(2.1 * G.swayPh) + 0.6 * Math.sin(3.7 * G.swayPh + 1.3));
-    const c = G.brake ? SWAY_C_BRAKE : SWAY_C;
+    const c = lerp(SWAY_C, SWAY_C_LOW, G.lowered / DUCK_MAX);
     G.swayV += (-SWAY_K * G.sway - c * G.swayV + ex) * dt - dx * 0.03; // lane changes kick the load
     G.sway += G.swayV * dt;
     // waypoint clock
@@ -1284,13 +1404,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     // bridges
     fillBridges();
     const top = hEff();
-    const z0 = G.dist + LOAD_Z0, z1 = G.dist + LOAD_Z1;
+    const z0 = G.dist + G.z0, z1 = G.dist + G.z1;
     for (const b of bridges) {
       if (!b.active) continue;
       if (b.w + b.depth < G.dist - 70) { b.active = false; b.group.visible = false; continue; }
       const under = z1 > b.w && z0 < b.w + b.depth;
       if (under && !b.cleared) {
-        if (G.brake) b.brakedUnder = true;
+        if (G.lowered > 0.05) b.duckedUnder = true;
         if (G.hammer) b.hammeredUnder = true;
         const li = Math.abs(G.laneX) < 1.9 ? 1 : G.laneX < 0 ? 0 : 2;
         const L = b.lanes[li];
@@ -1378,7 +1498,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     mat.beam.opacity = 0.16 + 0.2 * night;
     refreshEnv(Math.floor(t * 8));
   }
-  void headL; void headR; void tail; void sideMarkers; void roofMarkers; void hoodLamps; void loadMarkers;
+  void headL; void headR; void tail; void sideMarkers; void roofMarkers; void hoodLamps;
 
   // ─── camera ───
   let portrait = false;
@@ -1454,7 +1574,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     truck.position.x = G.laneX;
     if (G.phase !== 'crash') { truck.rotation.z = (tx - G.laneX) * 0.03; truck.rotation.y = (tx - G.laneX) * -0.05; truck.rotation.x = Math.atan(slopeAt(d + 8)); }
     loadG.rotation.z = G.sway;
-    loadG.position.y = -0.02 * Math.abs(Math.sin(G.time * 9)) * (G.speed / 30);
+    loadG.position.y = -G.lowered - 0.02 * Math.abs(Math.sin(G.time * 9)) * (G.speed / 30);
     const spin = G.speed * dt / 0.53;
     for (const w of wheels) w.rotation.x -= spin;
     const spinBig = G.speed * dt / 0.8;
@@ -1472,9 +1592,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     }
     // lamps / marker / chips on the nearest uncleared bridge
     let nb: Bridge | null = null;
-    for (const b of bridges) if (b.active && !b.cleared && b.w + b.depth > d + LOAD_Z0 && (!nb || b.w < nb.w)) nb = b;
+    for (const b of bridges) if (b.active && !b.cleared && b.w + b.depth > d + G.z0 && (!nb || b.w < nb.w)) nb = b;
     if (nb && nb.w < d + LOOK_AHEAD) {
-      updateVerdicts(nb, hEff(), hSteady());
+      updateVerdicts(nb, hEff(), hMin());
       marker.visible = G.phase === 'run';
       marker.position.set(G.laneX, hEff() + hAt(nb.w + nb.depth / 2) - h0, d - nb.w + 0.6);
       marker.rotation.z = G.sway;
@@ -1484,7 +1604,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
         const L = nb.lanes[i], c = el.chips[i];
         c.className = 'c3-chip ' + L.verdict + (i === G.lane ? ' cur' : '');
         (c.children[0] as HTMLElement).textContent = L.clear.toFixed(2);
-        (c.children[1] as HTMLElement).textContent = L.verdict === 'fit' ? 'Fits' : L.verdict === 'steady' ? 'Steady only' : 'No';
+        (c.children[1] as HTMLElement).textContent = L.verdict === 'fit' ? 'Fits' : L.verdict === 'duck' ? 'Duck ▼' : 'No';
       }
     } else {
       marker.visible = false;
@@ -1496,9 +1616,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function updateHud() {
     el.km.textContent = G.score.toFixed(2);
     el.sp.textContent = String(Math.round(G.speed * 3.6));
-    el.mode.textContent = G.brake ? 'Braking' : G.hammer ? 'Hammer down' : 'Full ahead';
-    el.mode.className = 'mode' + (G.brake ? ' brake' : G.hammer ? ' hammer' : '');
-    el.h.textContent = hEff().toFixed(2) + ' m' + (lift() > 0.02 ? ' · swaying' : ' · steady');
+    el.mode.textContent = G.airLocked ? 'Air empty' : G.lowered > 0.02 ? 'Load lowered' : G.hammer ? 'Hammer down' : 'Full ahead';
+    el.mode.className = 'mode' + (G.airLocked ? ' hammer' : G.lowered > 0.02 ? ' brake' : G.hammer ? ' hammer' : '');
+    el.airbar.style.transform = `scaleX(${G.air.toFixed(3)})`;
+    el.air.className = 'air' + (G.airLocked ? ' lock' : G.air < 0.3 ? ' low' : '');
+    el.h.textContent = `${LOADS[G.loadIdx].name} · ${hEff().toFixed(2)} m`;
     el.mult.innerHTML = G.mult > 1 ? `<span>Multiplier</span><span>×${G.mult}</span>` : '';
     el.wpn.textContent = `${wpName()} · ${Math.max(0, (G.wpW - G.dist) / 1000).toFixed(2)} km`;
     el.wpt.textContent = fmtClock(G.wpClock);
@@ -1537,8 +1659,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     switch (a) {
       case 'left': if (G.phase === 'run' && G.lane > 0) { G.lane--; sfx('lane'); } break;
       case 'right': if (G.phase === 'run' && G.lane < 2) { G.lane++; sfx('lane'); } break;
-      case 'brake': case 'hold': G.brake = G.phase === 'run'; break;
-      case 'release': G.brake = false; break;
+      case 'hold': case 'brake': G.hold = G.phase === 'run'; break;
+      case 'release': G.hold = false; break;
       case 'hammer': case 'throttle': if (G.phase === 'run') { G.hammer = !G.hammer; banner(G.hammer ? 'Hammer down' : 'Easing off', G.hammer ? '×2 score · less time to read' : '', G.hammer, 900); } break;
       case 'camera': camMode = camMode === 'chase' ? 'dolly' : 'chase'; break;
       case 'sound': audioSet(!audio.on); break;
@@ -1551,7 +1673,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     switch (e.code) {
       case 'ArrowLeft': case 'KeyA': action('left'); e.preventDefault(); break;
       case 'ArrowRight': case 'KeyD': action('right'); e.preventDefault(); break;
-      case 'Space': case 'ArrowDown': if (G.phase === 'run') action('brake'); else action('start'); e.preventDefault(); break;
+      case 'Space': case 'ArrowDown': if (G.phase === 'run') action('hold'); else action('start'); e.preventDefault(); break;
       case 'KeyS': case 'ArrowUp': action('hammer'); break;
       case 'KeyC': action('camera'); break;
       case 'KeyM': action('sound'); break;
@@ -1568,7 +1690,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     if (pid !== null) return;
     pid = e.pointerId; px0 = e.clientX; py0 = e.clientY; swiped = false;
     cvs.setPointerCapture?.(e.pointerId);
-    if (G.phase === 'run') action('brake');
+    if (G.phase === 'run') action('hold');
   };
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== pid || swiped) return;
@@ -1587,8 +1709,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
 
   // ─── hooks ───
   const snapshot = (): GameSnapshot => ({
-    phase: G.phase, dist: G.dist, speed: G.speed, hammer: G.hammer, brake: G.brake, mult: G.mult, score: G.score,
-    lane: G.lane, laneX: G.laneX, loadH: G.loadH, sway: G.sway, lift: lift(), hEff: hEff(), cleared: G.cleared, shaveChain: G.shaveChain,
+    phase: G.phase, dist: G.dist, speed: G.speed, hammer: G.hammer, hold: G.hold, lowered: G.lowered, air: G.air, airLocked: G.airLocked, mult: G.mult, score: G.score,
+    lane: G.lane, laneX: G.laneX, loadH: G.loadH, loadName: LOADS[G.loadIdx].name, sway: G.sway, lift: lift(), hEff: hEff(), cleared: G.cleared, shaveChain: G.shaveChain,
     crashKind: G.crashKind, tod: G.tod,
     waypoint: G.phase === 'run' ? { name: wpName(), remaining: G.wpW - G.dist, clock: G.wpClock } : null,
     dispatch: { text: DISPATCH[G.dispIdx % DISPATCH.length].text, progress: G.dispProg, goal: DISPATCH[G.dispIdx % DISPATCH.length].goal },
@@ -1597,7 +1719,12 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     traffic: traffic.filter((v) => v.active).map((v) => ({ w: v.w, len: v.len, lane: v.lane, v: v.v })),
   });
   window.__game = snapshot;
-  window.__gameWarp = (m: number) => { G.dist += m; G.tod = clamp(G.dist / (NIGHT_KM * 1000), 0, 1); resetBridges(); setWaypoint(G.wpIdx); applyTimeOfDay(G.tod); };
+  window.__gameWarp = (m: number) => {
+    G.dist += m; G.tod = clamp(G.dist / (NIGHT_KM * 1000), 0, 1);
+    const idx = G.dist < UPGRADE_FIRST ? 0 : Math.min(LOADS.length - 1, 1 + Math.floor((G.dist - UPGRADE_FIRST) / UPGRADE_EVERY));
+    setLoad(idx); G.nextUpgrade = idx === 0 ? UPGRADE_FIRST : UPGRADE_FIRST + idx * UPGRADE_EVERY;
+    resetBridges(); setWaypoint(G.wpIdx); applyTimeOfDay(G.tod);
+  };
   window.__gameInput = action;
   window.__gameCam = (pos, target) => { camOverride = pos ? { p: new THREE.Vector3(...pos), t: new THREE.Vector3(...(target || [0, 2, -12])) } : null; };
   // deterministic stepping for headless bots (rendering is not needed to advance the sim)
