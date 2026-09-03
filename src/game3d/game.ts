@@ -351,7 +351,7 @@ const CSS = `
 #c3-left{left:12px}#c3-right{right:12px}
 .c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;text-align:center;padding:0 18px;gap:12px}
 .c3-mark{background:linear-gradient(#f9c63a,#e9aa1c);border:4px solid #111;border-radius:14px;padding:14px 18px 12px;box-shadow:inset 0 0 0 3px #f2b32a,inset 0 0 0 5px #111,0 8px 0 rgba(0,0,0,.4),0 14px 30px rgba(0,0,0,.4);transform:rotate(-2deg);width:min(92vw,380px)}
-.c3-mark .w{font-family:${BIG_FONT};font-size:min(12.5vw,58px);line-height:.95;color:#111;letter-spacing:-.01em;white-space:nowrap;overflow:hidden}
+.c3-mark .w{font-family:${BIG_FONT};font-size:min(11.5vw,54px);line-height:.95;color:#111;letter-spacing:-.01em;white-space:nowrap;overflow:hidden}
 .c3-mark .tab{display:inline-block;margin-top:6px;background:#111;color:#f2b32a;font-size:12px;letter-spacing:.3em;font-weight:700;padding:4px 10px;text-transform:uppercase}
 .c3-mark .tab .ud{letter-spacing:-.15em;margin-right:.4em;font-size:10px}
 .c3-menu{display:flex;flex-direction:column;gap:9px;width:min(80vw,300px);margin-top:6px}
