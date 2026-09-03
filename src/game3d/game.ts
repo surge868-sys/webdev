@@ -417,7 +417,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   };
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 1600);
+  const camera = new THREE.PerspectiveCamera(52, 1, 1.0, 1600);
   scene.add(camera);
 
   // ─── sky, sun, fog, environment ───
@@ -467,7 +467,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   const mat = {
     asphalt: new THREE.MeshStandardMaterial({ map: asphalt.map, roughnessMap: asphalt.rough, roughness: 1, metalness: 0.05, envMapIntensity: 0.8 }),
     gravel: new THREE.MeshStandardMaterial({ color: '#8d8672', roughness: 1 }),
-    grass: new THREE.MeshStandardMaterial({ map: grass.map, roughness: 1 }),
+    grass: new THREE.MeshStandardMaterial({ map: grass.map, roughness: 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }),
     concrete: new THREE.MeshStandardMaterial({ map: concrete.map, roughnessMap: concrete.rough, roughness: 1 }),
     concreteClean: new THREE.MeshStandardMaterial({ map: concreteClean.map, roughness: 0.95 }),
     steelGreen: new THREE.MeshStandardMaterial({ color: '#2f6b4a', roughness: 0.6, metalness: 0.5 }),
@@ -497,7 +497,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   // ─── ground, road, median ───
   grass.map.repeat.set(60, 60);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), mat.grass);
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.06; ground.receiveShadow = true;
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.35; ground.receiveShadow = true;
   scene.add(ground);
   const fieldTex = [
     fieldMaps(rngFx, '#e3c22b', '#f0d24a', '#c9a81c'), // canola
@@ -510,22 +510,22 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   for (let i = 0; i < 10; i++) for (const side of [-1, 1]) {
     const t = fieldTex[(i + (side > 0 ? 2 : 0)) % 4];
     t.repeat.set(24, 12);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(340, 200), new THREE.MeshStandardMaterial({ map: t, roughness: 1 }));
-    m.rotation.x = -Math.PI / 2; m.position.y = -0.03; m.receiveShadow = true;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(340, 200), new THREE.MeshStandardMaterial({ map: t, roughness: 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    m.rotation.x = -Math.PI / 2; m.position.y = -0.3; m.receiveShadow = true;
     scene.add(m);
     fields.push({ m, w: i * 200, x: side * (170 + 34), span: 10 * 200 });
   }
   asphalt.map.repeat.set(1, 30); asphalt.rough.repeat.set(1, 30);
   const ROAD_LEN = 760;
   const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN), mat.asphalt);
-  road.rotation.x = -Math.PI / 2; road.position.set(0, 0.01, -ROAD_LEN / 2 + 60); road.receiveShadow = true;
+  road.rotation.x = -Math.PI / 2; road.position.set(0, 0.0, -ROAD_LEN / 2 + 60); road.receiveShadow = true;
   scene.add(road);
   const shoulder = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2 + 5, ROAD_LEN), mat.gravel);
-  shoulder.rotation.x = -Math.PI / 2; shoulder.position.set(0, 0.0, -ROAD_LEN / 2 + 60); shoulder.receiveShadow = true;
+  shoulder.rotation.x = -Math.PI / 2; shoulder.position.set(0, -0.12, -ROAD_LEN / 2 + 60); shoulder.receiveShadow = true;
   scene.add(shoulder);
   // oncoming carriageway across a grass median (divided highway like the photo)
   const road2 = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN), mat.asphalt);
-  road2.rotation.x = -Math.PI / 2; road2.rotation.z = Math.PI; road2.position.set(-ROAD_HALF * 2 - 14, 0.01, -ROAD_LEN / 2 + 60); road2.receiveShadow = true;
+  road2.rotation.x = -Math.PI / 2; road2.rotation.z = Math.PI; road2.position.set(-ROAD_HALF * 2 - 14, 0.0, -ROAD_LEN / 2 + 60); road2.receiveShadow = true;
   scene.add(road2);
   const shoulder2 = shoulder.clone(); shoulder2.position.x = road2.position.x; scene.add(shoulder2);
 
@@ -553,7 +553,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   })();
   const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
   const leafGoldMat = new THREE.MeshStandardMaterial({ map: leafGold, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
-  scatterGroups.push({ ...instanced(cardGeo, leafMat, 260, () => ({ w: rngFx() * 1000, x: (rngFx() < 0.5 ? -1 : 1) * (9 + rngFx() * 50), s: 1.4 + rngFx() * 2.2, rot: rngFx() * 3, span: 1000 })), y: 0 });
+  scatterGroups.push({ ...instanced(cardGeo, leafMat, 260, () => ({ w: rngFx() * 1000, x: (rngFx() < 0.5 ? -1 : 1) * (11 + rngFx() * 50), s: 1.4 + rngFx() * 2.2, rot: rngFx() * 3, span: 1000 })), y: 0 });
   // poplars / aspen: trunk + tall cards
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.26, 5, 6); trunkGeo.translate(0, 2.5, 0);
   const crownGeo = (() => { const g = cardGeo.clone(); g.scale(4.2, 7, 4.2); g.translate(0, 3.6, 0); return g; })();
@@ -803,6 +803,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   const bridges: Bridge[] = [];
   let bridgeSeq = 0;
   const railNameMat = new THREE.MeshStandardMaterial({ map: plateTex(RAIL_NAME, '#2a2926', '#d8cfb8', 1024, 128, 70, '#2a2926'), roughness: 0.8 });
+  // square pyramid with edges axis-aligned (rotate the geometry, never the scaled mesh)
+  const bermGeo = new THREE.CylinderGeometry(0.01, 1, 1, 4, 1); bermGeo.rotateY(Math.PI / 4); bermGeo.scale(0.707, 1, 0.707);
   function makeBridge(): Bridge {
     const group = new THREE.Group();
     group.visible = false;
@@ -830,7 +832,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     const abut: THREE.Mesh[] = [];
     for (let i = 0; i < 2; i++) {
       const a = new THREE.Mesh(railTieGeo, mat.concrete); a.castShadow = true; a.receiveShadow = true; group.add(a); abut.push(a);
-      const berm = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 1, 1, 4, 1), mat.grass); berm.name = 'berm'; berm.receiveShadow = true; group.add(berm); abut.push(berm);
+      const berm = new THREE.Mesh(bermGeo, mat.grass); berm.name = 'berm'; berm.receiveShadow = true; group.add(berm); abut.push(berm);
     }
     const nameSign = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.1), railNameMat); nameSign.name = 'railname'; nameSign.visible = false; group.add(nameSign);
     return { id: 0, w: 0, depth: 10, kind: 'girder', name: '', lanes, group, piers, abut, cleared: false, minMargin: 9, active: false, faceHidden: false, brakedUnder: false, hammeredUnder: false };
@@ -873,7 +875,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       const hA = lane.clear + 0.4;
       const wall = b.abut[i * 2], berm = b.abut[i * 2 + 1];
       wall.position.set(side * (ROAD_HALF + 2.9), hA / 2, -d / 2); wall.scale.set(1.2, hA, d + 0.4);
-      berm.position.set(side * (ROAD_HALF + 12), hA / 2 + 0.6, -d / 2); berm.scale.set(18, hA + 1.2, d + 26); berm.rotation.y = Math.PI / 4;
+      berm.position.set(side * (ROAD_HALF + 12.5), hA / 2 + 0.6, -d / 2); berm.scale.set(16, hA + 1.2, d + 22);
     }
     const ns = b.group.getObjectByName('railname') as THREE.Mesh;
     ns.visible = isRail;
