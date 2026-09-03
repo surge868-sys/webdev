@@ -350,10 +350,8 @@ const CSS = `
 .c3-btn:active{background:var(--y);color:#111;opacity:1}
 #c3-left{left:12px}#c3-right{right:12px}
 .c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;text-align:center;padding:0 18px;gap:12px}
-.c3-mark{background:linear-gradient(#f9c63a,#e9aa1c);border:4px solid #111;border-radius:14px;padding:14px 18px 12px;box-shadow:inset 0 0 0 3px #f2b32a,inset 0 0 0 5px #111,0 8px 0 rgba(0,0,0,.4),0 14px 30px rgba(0,0,0,.4);transform:rotate(-2deg);width:min(92vw,380px)}
-.c3-mark .w{font-family:${BIG_FONT};font-size:min(11.5vw,54px);line-height:.95;color:#111;letter-spacing:-.01em;white-space:nowrap;overflow:hidden}
-.c3-mark .tab{display:inline-block;margin-top:6px;background:#111;color:#f2b32a;font-size:12px;letter-spacing:.3em;font-weight:700;padding:4px 10px;text-transform:uppercase}
-.c3-mark .tab .ud{letter-spacing:-.15em;margin-right:.4em;font-size:10px}
+.c3-mark{width:min(92vw,400px);transform:rotate(-2deg);filter:drop-shadow(0 8px 0 rgba(0,0,0,.4)) drop-shadow(0 14px 24px rgba(0,0,0,.4))}
+.c3-mark svg{display:block}
 .c3-menu{display:flex;flex-direction:column;gap:9px;width:min(80vw,300px);margin-top:6px}
 .c3-menu .m{border-radius:9px;border:3px solid #fff;box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 4px 0 rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.35);background:linear-gradient(#22954f,#176e3a);color:#fff;font-family:${BIG_FONT};font-size:26px;letter-spacing:.06em;padding:11px 12px;cursor:pointer;text-transform:uppercase;line-height:1}
 .c3-menu .m small{display:block;font-family:${HUD_FONT};font-size:10px;letter-spacing:.2em;font-weight:700;opacity:.85;margin-top:3px}
@@ -417,7 +415,18 @@ const HUD_HTML = `
 <div class="c3-flash" id="c3-flash"></div>
 <div class="c3-title" id="c3-title">
   <div class="eb">Saskatoon · Circle Drive approach · 2026</div>
-  <div class="c3-mark"><div class="w">BRIDGE STRIKE!</div><div class="tab"><span class="ud">▲▼</span> Oversize load</div></div>
+  <div class="c3-mark"><svg viewBox="0 0 1000 420" width="100%" role="img" aria-label="BRIDGE STRIKE! Oversize load">
+    <rect x="6" y="6" width="988" height="408" rx="34" fill="#f2b32a" stroke="#141414" stroke-width="12"/>
+    <rect x="30" y="30" width="940" height="360" rx="20" fill="none" stroke="#141414" stroke-width="7"/>
+    <g font-family="Anton, 'Arial Narrow', Impact, sans-serif" font-size="230" fill="#141414" font-weight="400">
+      <text x="62" y="278" textLength="522" lengthAdjust="spacingAndGlyphs">BRIDGE ST</text>
+      <text x="676" y="278" textLength="262" lengthAdjust="spacingAndGlyphs">IKE!</text>
+    </g>
+    <rect x="600" y="86" width="64" height="192" rx="10" fill="#141414"/>
+    <g fill="#f4ecd8"><path d="M632 100 l22 34 h-13 v96 h13 l-22 34 l-22 -34 h13 v-96 h-13 z"/></g>
+    <rect x="360" y="312" width="280" height="56" fill="#141414"/>
+    <text x="500" y="353" text-anchor="middle" font-family="Oswald, 'Arial Narrow', sans-serif" font-weight="700" font-size="38" letter-spacing="4" fill="#f2b32a">OVERSIZE LOAD</text>
+  </svg></div>
   <div class="c3-menu">
     <div class="m" id="c3-start">Haul<small>Endless run · three excavators, a grain bin, farm equipment</small></div>
     <div class="m" id="c3-how">How to drive<small>Swipe lanes · hold to lower · swipe down to hammer</small></div>
