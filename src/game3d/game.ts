@@ -425,7 +425,7 @@ const HUD_HTML = `
     <rect x="600" y="86" width="64" height="192" rx="10" fill="#141414"/>
     <g fill="#f4ecd8"><path d="M632 100 l22 34 h-13 v96 h13 l-22 34 l-22 -34 h13 v-96 h-13 z"/></g>
     <rect x="360" y="312" width="280" height="56" fill="#141414"/>
-    <text x="500" y="353" text-anchor="middle" font-family="Oswald, 'Arial Narrow', sans-serif" font-weight="700" font-size="38" letter-spacing="4" fill="#f2b32a">OVERSIZE LOAD</text>
+    <text x="500" y="353" text-anchor="middle" textLength="244" lengthAdjust="spacingAndGlyphs" font-family="Oswald, 'Arial Narrow', sans-serif" font-weight="700" font-size="38" fill="#f2b32a">OVERSIZE LOAD</text>
   </svg></div>
   <div class="c3-menu">
     <div class="m" id="c3-start">Haul<small>Endless run · three excavators, a grain bin, farm equipment</small></div>
