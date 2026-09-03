@@ -108,7 +108,8 @@ while (s.phase === 'run' && Date.now() - tc < 60000) {
 }
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${out}/03-crash.png` });
-await page.waitForTimeout(1200);
+await page.waitForFunction(() => window.__game().phase === 'fail', null, { timeout: 20000 }).catch(() => {});
+await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/04-failcard.png` });
 console.log('CRASH', JSON.stringify({ phase: s.phase, crashKind: s.crashKind, dist: Math.round(s.dist) }));
 

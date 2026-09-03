@@ -1,4 +1,4 @@
-# CLEARANCE 3D
+# BRIDGE STRIKE!
 
 A mobile-first browser game about hauling an oversized load into a prairie city without smashing it into an overpass.
 

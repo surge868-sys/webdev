@@ -91,8 +91,9 @@ const fmtClock = (s: number) => {
   const neg = s < 0; s = Math.abs(s);
   return (neg ? '−' : '') + Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 };
-const PLATE_FONT = "'Oswald', var(--font-plate), 'Arial Narrow', Impact, sans-serif";
-const HUD_FONT = "'Cormorant Garamond', var(--font-hud), 'Times New Roman', serif";
+const PLATE_FONT = "'Oswald', var(--font-hud), 'Arial Narrow', Impact, sans-serif";
+const HUD_FONT = "'Oswald', var(--font-hud), 'Arial Narrow', Impact, sans-serif";
+const BIG_FONT = "'Anton', var(--font-big), 'Oswald', Impact, 'Arial Narrow', sans-serif";
 
 // ───────────────────────────── canvas textures ─────────────────────────────
 function cv2d(w: number, h: number) {
@@ -292,115 +293,151 @@ declare global {
 
 // ───────────────────────────── HUD ─────────────────────────────
 const CSS = `
-.c3-root{position:relative;width:100%;height:100%;overflow:hidden;background:#0b1020;font-family:${HUD_FONT};color:#efe6d3;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+.c3-root{position:relative;width:100%;height:100%;overflow:hidden;background:#0b1020;font-family:${HUD_FONT};color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;--y:#f2b32a;--yd:#111;--g:#1f8a48;--gd:#12602f;--o:#f2711c;--r:#d9271f;--cream:#f4ecd8;--ink:#141414}
 .c3-root canvas{display:block;width:100%;height:100%}
-.c3-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 55%,rgba(0,0,0,.42) 100%)}
-.c3-hud{position:absolute;inset:0;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 12px rgba(0,0,0,.35)}
+.c3-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 58%,rgba(0,0,0,.4) 100%)}
+.c3-hud{position:absolute;inset:0;pointer-events:none}
 .c3-hud *{box-sizing:border-box}
 .c3-hud.hidden,.c3-title.hidden{display:none}
-.c3-lbl{font-size:11px;letter-spacing:.28em;text-transform:uppercase;opacity:.78;font-weight:600}
-.c3-rule{height:1px;background:rgba(239,230,211,.45);margin:4px 0}
-.c3-wp{position:absolute;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center;white-space:nowrap;max-width:68vw;overflow:hidden;text-overflow:ellipsis}
-.c3-wp .n{font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;overflow:hidden;text-overflow:ellipsis}
-.c3-wp .t{font-size:30px;letter-spacing:.08em;line-height:1.05;font-variant-numeric:tabular-nums;margin-top:2px}
-.c3-wp .t.late{color:#f0a05a}
-.c3-view{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8;pointer-events:auto;cursor:pointer;padding:4px 0}
-.c3-snd{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8;pointer-events:auto;cursor:pointer;padding:4px 0}
-.c3-next{position:absolute;top:calc(max(14px,env(safe-area-inset-top)) + 78px);left:50%;transform:translateX(-50%);display:flex;gap:18px}
-.c3-chip{width:58px;text-align:center;font-variant-numeric:tabular-nums}
-.c3-chip .h{font-size:18px;letter-spacing:.04em;line-height:1.1}
-.c3-chip .v{font-size:9px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin-top:1px}
-.c3-chip .bar{height:3px;margin-top:4px;background:rgba(239,230,211,.3);border-radius:2px}
-.c3-chip.fit .bar{background:#5fd68a}.c3-chip.duck .bar{background:#f2b32a}.c3-chip.no .bar{background:#e0463a}
-.c3-chip.fit .v{color:#8ff0b0}.c3-chip.duck .v{color:#ffd27a}.c3-chip.no .v{color:#ff8a80}
-.c3-chip.cur .h{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
-.c3-chip.off{opacity:.35}
-.c3-bl{position:absolute;left:16px;bottom:max(18px,env(safe-area-inset-bottom));width:150px}
-.c3-bl .sp{font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
-.c3-bl .sp small{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
-.c3-bl .mode{font-size:12px;letter-spacing:.26em;text-transform:uppercase;font-weight:600;margin-top:4px;min-height:14px}
-.c3-bl .mode.hammer{color:#f0a05a}.c3-bl .mode.brake{color:#8fd0ff}
-.c3-bl .air{height:4px;background:rgba(239,230,211,.25);margin-top:3px;width:150px}
-.c3-bl .air i{display:block;height:100%;background:#8fd0ff;transform-origin:left}
-.c3-bl .air.low i{background:#f2b32a}.c3-bl .air.lock i{background:#e0463a}
-.c3-bl .disp{font-size:11px;letter-spacing:.12em;opacity:.75;margin-top:6px;line-height:1.3;min-height:14px}
-.c3-br{position:absolute;right:16px;bottom:max(18px,env(safe-area-inset-bottom));width:190px;text-align:right}
-.c3-br .sc{font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
-.c3-br .sc small{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
-.c3-br .row{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-top:3px;font-variant-numeric:tabular-nums}
-.c3-br .mult{color:#ffd27a;font-weight:600}
-.c3-disp{position:absolute;left:16px;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 84px);width:min(44vw,200px)}
-.c3-disp .d{font-size:13px;line-height:1.25;margin-top:2px}
-.c3-disp .p{font-size:11px;letter-spacing:.2em;opacity:.75;margin-top:2px}
-.c3-hint{position:absolute;left:50%;top:calc(max(14px,env(safe-area-inset-top)) + 138px);transform:translateX(-50%);font-size:11px;letter-spacing:.22em;text-transform:uppercase;white-space:nowrap;opacity:.85;transition:opacity 1s;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
-.c3-banner{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%) scale(.9);text-align:center;opacity:0;transition:opacity .18s,transform .18s;white-space:nowrap}
-.c3-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
-.c3-banner .a{font-size:40px;letter-spacing:.2em;text-transform:uppercase;line-height:1}
-.c3-banner .b{font-size:14px;letter-spacing:.3em;text-transform:uppercase;color:#ffd27a;margin-top:6px}
-.c3-banner.warn .a{color:#f0a05a}
+.c3-sign{border-radius:8px;border:3px solid #fff;box-shadow:0 3px 0 rgba(0,0,0,.45),0 6px 14px rgba(0,0,0,.35);text-transform:uppercase;letter-spacing:.04em;line-height:1}
+.c3-green{background:linear-gradient(#22954f,#176e3a);border-color:#fff;color:#fff}
+.c3-yellow{background:linear-gradient(#f7c235,#e8a91a);border-color:#111;color:#111}
+.c3-white{background:linear-gradient(#fff,#e9e9e9);border-color:#111;color:#111}
+.c3-orange{background:linear-gradient(#ff8a2a,#e8641a);border-color:#111;color:#111}
+.c3-lbl{font-size:10px;letter-spacing:.2em;opacity:.85;font-weight:700}
+.c3-big{font-family:${BIG_FONT};font-weight:400;font-variant-numeric:tabular-nums}
+.c3-wp{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:70px;padding:6px 10px 7px;max-width:300px}
+.c3-wp .n{font-size:11px;letter-spacing:.14em;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c3-wp .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:2px}
+.c3-wp .km{font-size:28px}.c3-wp .km small{font-size:12px;margin-left:4px;letter-spacing:.1em}
+.c3-wp .t{font-size:20px}.c3-wp .t.late{color:#ffb3a8}
+.c3-wp .mult{font-size:12px;letter-spacing:.12em;color:#ffd24a;font-weight:700;min-height:12px;margin-top:2px}
+.c3-snd,.c3-view{position:absolute;top:max(12px,env(safe-area-inset-top));width:46px;height:46px;border-radius:50%;background:#111;border:3px solid #fff;display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;font-size:11px;letter-spacing:.06em;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.c3-snd{right:12px}.c3-view{right:12px;top:calc(max(12px,env(safe-area-inset-top)) + 54px);font-size:10px}
+.c3-snd.on{background:var(--y);color:#111;border-color:#111}
+.c3-next{position:absolute;top:calc(max(12px,env(safe-area-inset-top)) + 110px);left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.c3-chip{width:74px;padding:5px 0 6px;text-align:center;border-radius:7px;border:3px solid #111;box-shadow:0 3px 0 rgba(0,0,0,.45);background:#8a8a8a;color:#111;transition:background .12s}
+.c3-chip .h{font-family:${BIG_FONT};font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.c3-chip .v{font-size:9px;letter-spacing:.16em;font-weight:700;margin-top:3px;text-transform:uppercase}
+.c3-chip .bar{display:none}
+.c3-chip.fit{background:linear-gradient(#2fbf62,#1f8a48);color:#fff;border-color:#fff}.c3-chip.duck{background:linear-gradient(#f7c235,#e8a91a)}.c3-chip.no{background:linear-gradient(#ff7a2a,#e04b12);color:#111}
+.c3-chip.cur{transform:translateY(-3px);box-shadow:0 6px 0 rgba(0,0,0,.45)}
+.c3-chip.off{opacity:.3}
+.c3-bl{position:absolute;left:12px;bottom:max(14px,env(safe-area-inset-bottom));width:124px;padding:6px 10px 8px}
+.c3-bl .sp{font-size:34px;line-height:1}.c3-bl .sp small{font-size:12px;letter-spacing:.1em;margin-left:4px}
+.c3-bl .mode{font-size:10px;letter-spacing:.16em;font-weight:700;margin-top:3px;min-height:12px}
+.c3-bl .mode.hammer{color:#c8320f}.c3-bl .mode.brake{color:#0b5fa8}
+.c3-bl .disp{display:none}
+.c3-br{position:absolute;right:12px;bottom:max(14px,env(safe-area-inset-bottom));width:150px;padding:6px 10px 8px;text-align:right}
+.c3-br .c3-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c3-br .sc{display:none}
+.c3-br .row{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.1em;font-weight:700;margin-top:3px}
+.c3-br .row.load{display:block;text-align:right;font-family:${BIG_FONT};font-weight:400;font-size:26px;letter-spacing:.02em;margin-top:0}
+.c3-br .row.mult{display:none}
+.c3-air{position:absolute;left:50%;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 4px);transform:translateX(-50%);width:clamp(76px,100vw - 320px,180px);height:22px;border:3px solid #111;border-radius:6px;background:#1c1c1c;overflow:hidden;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.c3-air i{display:block;height:100%;width:100%;transform-origin:left;background:repeating-linear-gradient(135deg,#f2b32a 0 12px,#111 12px 24px)}
+.c3-air.low i{background:repeating-linear-gradient(135deg,#f2711c 0 12px,#111 12px 24px)}.c3-air.lock i{background:repeating-linear-gradient(135deg,#d9271f 0 12px,#111 12px 24px)}
+.c3-airlbl{position:absolute;left:50%;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 30px);transform:translateX(-50%);font-size:10px;letter-spacing:.24em;font-weight:700;text-shadow:0 1px 2px #000}
+.c3-dispo{position:absolute;left:12px;top:calc(max(12px,env(safe-area-inset-top)) + 88px);font-size:10px;letter-spacing:.1em;font-weight:700;text-shadow:0 1px 2px #000;white-space:nowrap;max-width:70vw;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+.c3-hint{position:absolute;left:50%;top:calc(max(12px,env(safe-area-inset-top)) + 206px);transform:translateX(-50%);font-size:11px;letter-spacing:.18em;font-weight:700;white-space:nowrap;text-shadow:0 1px 3px #000;transition:opacity 1s;max-width:94vw;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
+.c3-banner{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.85) rotate(-2deg);text-align:center;opacity:0;transition:opacity .15s,transform .15s;white-space:nowrap}
+.c3-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-2deg)}
+.c3-banner .a{font-family:${BIG_FONT};font-size:46px;line-height:1;text-transform:uppercase;color:var(--y);-webkit-text-stroke:2px #111;text-shadow:0 4px 0 #111,0 6px 12px rgba(0,0,0,.5);letter-spacing:.02em}
+.c3-banner .b{display:inline-block;margin-top:8px;background:#111;color:#fff;font-size:12px;letter-spacing:.2em;font-weight:700;padding:4px 10px;text-transform:uppercase}
+.c3-banner.warn .a{color:var(--o)}
 .c3-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
-.c3-btn{position:absolute;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 150px);width:56px;height:56px;border:1px solid rgba(239,230,211,.35);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;pointer-events:auto;cursor:pointer;background:rgba(6,10,20,.18);opacity:.55}
-.c3-btn:active{background:rgba(239,230,211,.85);color:#111}
-#c3-left{left:14px}#c3-right{right:14px}
-.c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;text-align:center;padding:0 20px;background:linear-gradient(rgba(4,8,18,.15),rgba(4,8,18,.55))}
-.c3-title .eb{font-size:11px;letter-spacing:.42em;text-transform:uppercase;opacity:.8}
-.c3-title .lg{font-size:min(12.5vw,84px);letter-spacing:.16em;text-transform:uppercase;line-height:1;margin:10px 0 6px;padding-left:.16em;font-weight:400;white-space:nowrap}
-.c3-title .sub{font-size:13px;letter-spacing:.34em;text-transform:uppercase;opacity:.85}
-.c3-title .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:30px 0 26px;width:min(92vw,400px)}
-.c3-title .card{border:1px solid rgba(239,230,211,.45);padding:12px 8px;text-align:center;background:rgba(4,8,18,.35)}
-.c3-title .card b{display:block;font-size:12px;letter-spacing:.24em;text-transform:uppercase;font-weight:600}
-.c3-title .card i{display:block;font-style:normal;font-size:11px;opacity:.75;margin-top:6px;line-height:1.35}
-.c3-title .tap{font-size:15px;letter-spacing:.42em;text-transform:uppercase;animation:c3pulse 1.6s infinite}
-.c3-title .keys{font-size:11px;letter-spacing:.24em;text-transform:uppercase;opacity:.7;margin-top:14px;line-height:1.7}
-.c3-title .gc{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));font-size:11px;letter-spacing:.26em;text-transform:uppercase;opacity:.7}
-@keyframes c3pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.c3-card{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(4,8,18,.6);pointer-events:auto}
+.c3-btn{position:absolute;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 76px);width:58px;height:58px;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;pointer-events:auto;cursor:pointer;background:rgba(17,17,17,.55);opacity:.6;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.c3-btn:active{background:var(--y);color:#111;opacity:1}
+#c3-left{left:12px}#c3-right{right:12px}
+.c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;text-align:center;padding:0 18px;gap:12px}
+.c3-mark{background:linear-gradient(#f9c63a,#e9aa1c);border:4px solid #111;border-radius:14px;padding:14px 18px 12px;box-shadow:inset 0 0 0 3px #f2b32a,inset 0 0 0 5px #111,0 8px 0 rgba(0,0,0,.4),0 14px 30px rgba(0,0,0,.4);transform:rotate(-2deg);width:min(92vw,380px)}
+.c3-mark .w{font-family:${BIG_FONT};font-size:min(12.5vw,58px);line-height:.95;color:#111;letter-spacing:-.01em;white-space:nowrap;overflow:hidden}
+.c3-mark .tab{display:inline-block;margin-top:6px;background:#111;color:#f2b32a;font-size:12px;letter-spacing:.3em;font-weight:700;padding:4px 10px;text-transform:uppercase}
+.c3-mark .tab .ud{letter-spacing:-.15em;margin-right:.4em;font-size:10px}
+.c3-menu{display:flex;flex-direction:column;gap:9px;width:min(80vw,300px);margin-top:6px}
+.c3-menu .m{border-radius:9px;border:3px solid #fff;box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 4px 0 rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.35);background:linear-gradient(#22954f,#176e3a);color:#fff;font-family:${BIG_FONT};font-size:26px;letter-spacing:.06em;padding:11px 12px;cursor:pointer;text-transform:uppercase;line-height:1}
+.c3-menu .m small{display:block;font-family:${HUD_FONT};font-size:10px;letter-spacing:.2em;font-weight:700;opacity:.85;margin-top:3px}
+.c3-menu .m:active{transform:translateY(3px);box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 1px 0 rgba(0,0,0,.45)}
+.c3-menu .m.dim{filter:saturate(.4) brightness(.8)}
+.c3-title .gc{font-size:11px;letter-spacing:.2em;font-weight:700;text-shadow:0 1px 3px #000;text-transform:uppercase}
+.c3-title .eb{font-size:11px;letter-spacing:.24em;font-weight:700;text-shadow:0 1px 3px #000;text-transform:uppercase;opacity:.9}
+.c3-live{position:absolute;left:0;right:0;bottom:0;height:44px;background:#141414;border-top:3px solid #fff;display:flex;align-items:center;overflow:hidden;pointer-events:none}
+.c3-live .tag{flex:none;background:var(--r);color:#fff;font-family:${BIG_FONT};font-size:20px;letter-spacing:.08em;padding:0 14px;height:100%;display:flex;align-items:center;border-right:3px solid #fff}
+.c3-live .tk{flex:1;overflow:hidden;white-space:nowrap;font-size:14px;letter-spacing:.1em;font-weight:700;text-transform:uppercase}
+.c3-live .tk span{display:inline-block;padding-left:100%;animation:c3tick 38s linear infinite}
+@keyframes c3tick{to{transform:translateX(-100%)}}
+.c3-card{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 16px max(16px,env(safe-area-inset-bottom));background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.55));pointer-events:auto;gap:12px}
 .c3-card.show{display:flex}
-.c3-panel{width:min(90vw,420px);border:1px solid rgba(239,230,211,.5);background:rgba(8,12,24,.82);padding:22px 24px;text-align:center;backdrop-filter:blur(6px)}
-.c3-panel h1{margin:0;font-size:38px;letter-spacing:.2em;text-transform:uppercase;font-weight:400;color:#ff8a80;line-height:1}
-.c3-panel h2{margin:8px 0 16px;font-size:12px;letter-spacing:.3em;text-transform:uppercase;font-weight:600;opacity:.8}
-.c3-panel .rows{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;text-align:left;margin:0 0 18px}
-.c3-panel .rows span{display:block;font-size:10px;letter-spacing:.26em;text-transform:uppercase;opacity:.7}
-.c3-panel .rows b{display:block;font-size:24px;font-weight:400;font-variant-numeric:tabular-nums}
-.c3-panel .go{display:inline-block;border:1px solid rgba(239,230,211,.7);padding:10px 30px;font-size:14px;letter-spacing:.34em;text-transform:uppercase;cursor:pointer;pointer-events:auto}
-.c3-panel .go:active{background:#efe6d3;color:#111}
+.c3-over{font-family:${BIG_FONT};font-size:min(21vw,96px);line-height:.88;text-align:center;-webkit-text-stroke:3px #111;text-shadow:0 6px 0 #111,0 10px 18px rgba(0,0,0,.5);letter-spacing:.02em;margin-bottom:auto;margin-top:8vh}
+.c3-over .y{color:var(--y);display:block}.c3-over .r{color:var(--r);display:block}
+.c3-panel{width:min(92vw,420px);background:var(--cream);color:var(--ink);border:4px solid #111;border-radius:14px;padding:14px 16px;box-shadow:0 8px 0 rgba(0,0,0,.4),0 14px 30px rgba(0,0,0,.45);text-align:left}
+.c3-panel h1{margin:0;font-family:${BIG_FONT};font-size:34px;letter-spacing:.02em;line-height:1;text-transform:uppercase;color:var(--r)}
+.c3-panel h2{margin:4px 0 10px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:#444}
+.c3-panel .rows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px}
+.c3-panel .rows span{display:block;font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:#555}
+.c3-panel .rows b{display:block;font-family:${BIG_FONT};font-size:22px;font-weight:400;font-variant-numeric:tabular-nums;line-height:1.1}
+.c3-strip{width:min(92vw,420px);height:16px;border:3px solid #111;border-radius:4px;background:repeating-linear-gradient(135deg,#f2b32a 0 14px,#111 14px 28px);box-shadow:0 3px 0 rgba(0,0,0,.4)}
+.c3-acts{display:flex;gap:12px;width:min(92vw,420px)}
+.c3-acts .a{flex:1;border-radius:10px;border:3px solid #111;font-family:${BIG_FONT};font-size:24px;letter-spacing:.06em;text-transform:uppercase;padding:14px 0;text-align:center;cursor:pointer;color:#111;box-shadow:0 5px 0 rgba(0,0,0,.45);line-height:1}
+.c3-acts .a:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.45)}
+.c3-acts .share{background:linear-gradient(#ff8a2a,#e8641a)}
+.c3-acts .go{background:linear-gradient(#5ed26a,#2fa53d)}
 `;
+const HEADLINES = [
+  'FIFTH OVERPASS STRIKE THIS YEAR — CITY ENGINEERS "NOT SURPRISED"',
+  'GRAIN BIN WEDGED UNDER 51ST STREET; BIN REPORTED "FINE", BRIDGE LESS SO',
+  'DRIVER TOLD POLICE THE BRIDGE "CAME OUT OF NOWHERE"',
+  '$11,200 FINE FOR TRACK HOE THAT MET THE HWY 16 OVERPASS',
+  'REPAIR BILLS PASS $650,000 — CLEARANCE SIGNS STILL LEGIBLE, REPORT CONFIRMS',
+  'SEVENTH STRIKE IN THE PROVINCE — MAYOR REQUESTS A NAP',
+  'TRUCKING GROUP URGES ENFORCEMENT; OVERPASSES URGE LOWER LOADS',
+  'DRIVER ASKS IF BRIDGE "COULD MAYBE DUCK"',
+  'ANOTHER DAY, ANOTHER OVERPASS',
+  'CITY TO PURSUE "ALL LEGAL AVENUES" AND POSSIBLY A TALLER BRIDGE',
+];
 const HUD_HTML = `
 <div class="c3-vig"></div>
 <div class="c3-hud hidden" id="c3-hud">
-  <div class="c3-wp"><div class="n" id="c3-wpn">—</div><div class="t" id="c3-wpt">—</div></div>
-  <div class="c3-snd" id="c3-snd">Sound off</div>
-  <div class="c3-view" id="c3-view">Chase</div>
+  <div class="c3-sign c3-green c3-wp"><div class="n" id="c3-wpn">—</div><div class="row"><div class="km c3-big"><span id="c3-km">0.00</span><small>km</small></div><div class="t c3-big" id="c3-wpt">—</div></div><div class="mult" id="c3-mult"></div></div>
+  <div class="c3-snd" id="c3-snd">OFF</div>
+  <div class="c3-view" id="c3-view">CAM</div>
   <div class="c3-next" id="c3-next">
     <div class="c3-chip" id="c3-chip0"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
     <div class="c3-chip" id="c3-chip1"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
     <div class="c3-chip" id="c3-chip2"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
   </div>
-  <div class="c3-bl"><div class="c3-lbl">Speed</div><div class="c3-rule"></div><div class="sp"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div><div class="c3-lbl" style="margin-top:6px">Air</div><div class="air" id="c3-air"><i id="c3-airbar"></i></div><div class="disp" id="c3-disp"></div></div>
-  <div class="c3-br"><div class="c3-lbl">Distance made good</div><div class="c3-rule"></div><div class="sc"><span id="c3-km">0.00</span><small>km</small></div>
-    <div class="row"><span>Load</span><span id="c3-h">4.30 m</span></div><div class="row mult" id="c3-mult"></div></div>
+  <div class="c3-sign c3-white c3-bl"><div class="c3-lbl">Speed</div><div class="sp c3-big"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div><div class="disp" id="c3-disp"></div></div>
+  <div class="c3-sign c3-yellow c3-br"><div class="c3-lbl" id="c3-hl">Load</div><div class="row load" id="c3-h">4.75 m</div><div class="row"><span>Cleared</span><span id="c3-cl">0</span></div></div>
+  <div class="c3-dispo" id="c3-dispo"></div>
+  <div class="c3-airlbl">AIR</div><div class="c3-air" id="c3-air"><i id="c3-airbar"></i></div>
   <div class="c3-btn" id="c3-left">◀</div><div class="c3-btn" id="c3-right">▶</div>
-  <div class="c3-hint" id="c3-hint">Swipe to change lane · Hold to lower the load · Swipe down to hammer</div>
+  <div class="c3-hint" id="c3-hint">Swipe ◀ ▶ lane · hold to lower the load · swipe ▼ hammer down</div>
   <div class="c3-banner" id="c3-banner"><div class="a"></div><div class="b"></div></div>
 </div>
 <div class="c3-flash" id="c3-flash"></div>
 <div class="c3-title" id="c3-title">
-  <div class="eb">Saskatoon · Circle Drive approach</div>
-  <div class="lg">Clearance</div>
-  <div class="sub">Three excavators, a grain bin, some farm equipment. Based on a true year.</div>
-  <div class="tap">Tap to haul</div>
-  <div class="keys">Swipe ◀ ▶ lane · hold to lower the load · swipe ▼ hammer down<br>Keys ← → · Space · S · C view · M sound</div>
-  <div class="gc" id="c3-best"></div>
-</div>
-<div class="c3-card" id="c3-card"><div class="c3-panel">
-  <h1 id="c3-kind">Bridge strike</h1><h2 id="c3-bname">—</h2>
-  <div class="rows">
-    <div><span>Hauled</span><b id="c3-fkm">0.00 km</b></div><div><span>Top multiplier</span><b id="c3-fmult">×1</b></div>
-    <div><span>Bridges cleared</span><b id="c3-fcl">0</b></div><div><span>Best</span><b id="c3-fbest">0.00 km</b></div>
-    <div><span>City repair estimate</span><b id="c3-frep">$0</b></div><div><span>Your fine</span><b id="c3-ffine">$0</b></div>
+  <div class="eb">Saskatoon · Circle Drive approach · 2026</div>
+  <div class="c3-mark"><div class="w">BRIDGE STRIKE!</div><div class="tab"><span class="ud">▲▼</span> Oversize load</div></div>
+  <div class="c3-menu">
+    <div class="m" id="c3-start">Haul<small>Endless run · three excavators, a grain bin, farm equipment</small></div>
+    <div class="m" id="c3-how">How to drive<small>Swipe lanes · hold to lower · swipe down to hammer</small></div>
+    <div class="m dim" id="c3-daily">Daily route<small>Coming soon</small></div>
   </div>
-  <div class="go" id="c3-restart">Haul again</div>
-</div></div>`;
+  <div class="gc" id="c3-best"></div>
+  <div class="c3-live"><div class="tag">LIVE</div><div class="tk"><span id="c3-ticker"></span></div></div>
+</div>
+<div class="c3-card" id="c3-card">
+  <div class="c3-over"><span class="y">GAME</span><span class="r">OVER</span></div>
+  <div class="c3-panel">
+    <h1 id="c3-kind">Bridge strike</h1><h2 id="c3-bname">—</h2>
+    <div class="rows">
+      <div><span>Hauled</span><b id="c3-fkm">0.00 km</b></div><div><span>Top multiplier</span><b id="c3-fmult">×1</b></div><div><span>Cleared</span><b id="c3-fcl">0</b></div>
+      <div><span>City repair bill</span><b id="c3-frep">$0</b></div><div><span>Your fine</span><b id="c3-ffine">$0</b></div><div><span>Best</span><b id="c3-fbest">0.00 km</b></div>
+    </div>
+  </div>
+  <div class="c3-strip"></div>
+  <div class="c3-acts"><div class="a share" id="c3-share">Share</div><div class="a go" id="c3-restart">Haul again</div></div>
+</div>`;
 
 // ───────────────────────────── the game ─────────────────────────────
 export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: string; sound?: boolean } = {}): () => void {
@@ -430,6 +467,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     left: $('c3-left'), right: $('c3-right'), hint: $('c3-hint'), banner: $('c3-banner'), flash: $('c3-flash'),
     title: $('c3-title'), best: $('c3-best'), card: $('c3-card'), kind: $('c3-kind'), bname: $('c3-bname'), fkm: $('c3-fkm'),
     fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), frep: $('c3-frep'), ffine: $('c3-ffine'), restart: $('c3-restart'),
+    share: $('c3-share'), start: $('c3-start'), how: $('c3-how'), ticker: $('c3-ticker'), dispo: $('c3-dispo'), hl: $('c3-hl'),
   };
 
   const scene = new THREE.Scene();
@@ -871,7 +909,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     loadG.add(loadMesh);
     for (const m of loadMarkers) loadG.remove(m); loadMarkers.length = 0;
     for (const z of [-G.z0 - 0.3, -G.z1 + 0.3]) for (const x of [-LOAD_HALF_W, LOAD_HALF_W]) loadMarkers.push(box(0.1, 0.1, 0.1, mat.amber, x, BED_H + 0.2, z, loadG, false));
-    el.h.textContent = `${LOADS[i].name} · ${LOADS[i].h.toFixed(2)} m`;
+    el.h.textContent = LOADS[i].h.toFixed(2) + ' m'; el.hl.textContent = LOADS[i].name;
   }
 
   // ─── traffic: half-tons and grain trucks in our lanes, oncoming on the far carriageway ───
@@ -1093,7 +1131,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   }
   function audioSet(on: boolean) {
     audio.on = on;
-    el.snd.textContent = on ? 'Sound on' : 'Sound off';
+    el.snd.textContent = on ? 'ON' : 'OFF'; el.snd.classList.toggle('on', on);
     if (on) { audioInit(); audio.ctx!.resume(); audio.master!.gain.setTargetAtTime(0.6, audio.ctx!.currentTime, 0.1); }
     else if (audio.master) audio.master.gain.setTargetAtTime(0, audio.ctx!.currentTime, 0.05);
   }
@@ -1244,17 +1282,22 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     el.flash.style.transition = 'none'; el.flash.style.opacity = '0.7';
     requestAnimationFrame(() => { el.flash.style.transition = 'opacity .6s'; el.flash.style.opacity = '0'; });
   }
+  function shareRun() {
+    const text = `I hauled ${G.score.toFixed(2)} km in BRIDGE STRIKE! before the ${G.crashBridge} got it. ${G.cleared} overpasses survived. Repair bill ${el.frep.textContent}.`;
+    const url = typeof location !== 'undefined' ? location.href : '';
+    if (navigator.share) navigator.share({ title: 'BRIDGE STRIKE!', text, url }).catch(() => { /* cancelled */ });
+    else if (navigator.clipboard) { navigator.clipboard.writeText(text + ' ' + url).then(() => banner('Copied', 'Paste it somewhere loud')); }
+  }
   function showFail() {
     G.phase = 'fail';
-    el.kind.textContent = (G.crashKind || 'BRIDGE STRIKE').toLowerCase();
-    el.kind.style.fontSize = G.crashKind === 'COLLISION' ? '34px' : '';
+    el.kind.textContent = G.crashKind === 'COLLISION' ? 'Rear-ended' : (G.crashKind || 'BRIDGE STRIKE') + '!';
     el.bname.textContent = G.crashBridge;
     el.fkm.textContent = G.score.toFixed(2) + ' km'; el.fmult.textContent = '×' + G.topMult;
     el.fcl.textContent = String(G.cleared); el.fbest.textContent = G.best.toFixed(2) + ' km';
     // the 2026 strikes ran $283k and $350k in repairs; the driver's fine was $11,200
     const repair = G.crashKind === 'COLLISION' ? 18000 + G.speed * 900 : 180000 + G.speed * 5200 + (G.loadH - 4.3) * 90000;
     el.frep.textContent = '$' + Math.round(repair / 1000) + ',000'; el.ffine.textContent = G.crashKind === 'COLLISION' ? '$580' : '$11,200';
-    el.card.classList.add('show');
+    el.card.classList.add('show'); el.hud.classList.add('hidden');
   }
   let bannerTimer = 0;
   function banner(a: string, b = '', warn = false, ms = 1500) {
@@ -1583,14 +1626,15 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     el.mode.className = 'mode' + (G.airLocked ? ' hammer' : G.lowered > 0.02 ? ' brake' : G.hammer ? ' hammer' : '');
     el.airbar.style.transform = `scaleX(${G.air.toFixed(3)})`;
     el.air.className = 'air' + (G.airLocked ? ' lock' : G.air < 0.3 ? ' low' : '');
-    el.h.textContent = `${LOADS[G.loadIdx].name} · ${hEff().toFixed(2)} m`;
-    el.mult.innerHTML = G.mult > 1 ? `<span>Multiplier</span><span>×${G.mult}</span>` : '';
+    el.h.textContent = hEff().toFixed(2) + ' m'; el.hl.textContent = LOADS[G.loadIdx].name;
+    el.mult.textContent = G.mult > 1 ? `×${G.mult}${G.hammer ? ' · HAMMER DOWN' : ''}` : '';
     el.wpn.textContent = `${wpName()} · ${Math.max(0, (G.wpW - G.dist) / 1000).toFixed(2)} km`;
     el.wpt.textContent = fmtClock(G.wpClock);
     el.wpt.classList.toggle('late', G.wpClock < 0);
     const dsp = DISPATCH[G.dispIdx % DISPATCH.length];
-    el.disp.textContent = `Dispatch · ${dsp.text} · ${G.dispProg}/${dsp.goal}`;
-    el.view.textContent = camMode === 'chase' ? 'Chase' : 'Dolly';
+    el.dispo.textContent = `DISPATCH · ${dsp.text.toUpperCase()} · ${G.dispProg}/${dsp.goal}`;
+    el.cl.textContent = String(G.cleared);
+    el.view.textContent = camMode === 'chase' ? 'CAM' : 'SIDE';
   }
   let last = performance.now(), raf = 0, alive = true, todAcc = 0;
   function frame(now: number) {
@@ -1666,7 +1710,10 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   cvs.addEventListener('pointerup', onUp); cvs.addEventListener('pointercancel', onUp);
   const btn = (b: HTMLElement, a: string) => b.addEventListener('pointerdown', (e) => { e.stopPropagation(); action(a); });
   btn(el.left, 'left'); btn(el.right, 'right'); btn(el.view, 'camera'); btn(el.snd, 'sound');
-  el.title.addEventListener('pointerup', () => action('start'));
+  el.start.addEventListener('pointerup', () => action('start'));
+  el.how.addEventListener('pointerup', () => { el.how.innerHTML = 'How to drive<small>Read the yellow plates. Green FITS, yellow DUCK: hold to lower. Orange: change lane. Air runs out.</small>'; });
+  el.share.addEventListener('pointerup', (e) => { e.stopPropagation(); shareRun(); });
+  el.ticker.textContent = HEADLINES.join('   •   ') + '   •   ';
   el.restart.addEventListener('pointerup', (e) => { e.stopPropagation(); action('restart'); });
   el.card.addEventListener('pointerdown', (e) => e.stopPropagation());
 

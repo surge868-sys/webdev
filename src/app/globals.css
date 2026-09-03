@@ -1,4 +1,4 @@
 @import "tailwindcss";
 
 html, body { height: 100%; margin: 0; overscroll-behavior: none; }
-body { font-family: var(--font-hud), 'Times New Roman', serif; }
+body { font-family: var(--font-hud), 'Arial Narrow', sans-serif; }

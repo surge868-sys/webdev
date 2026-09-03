@@ -1,4 +1,4 @@
-# CLEARANCE 3D — technical plan
+# BRIDGE STRIKE! (was CLEARANCE 3D) — technical plan
 
 Rebuild #2 (after M1 review): high-fidelity look (PBR + procedural maps, sky shader, env reflections,
 soft shadows, time-of-day), hold-to-brake replaces hold-to-lower, Saskatoon / Circle Drive on the signs,
