@@ -349,11 +349,23 @@ const CSS = `
 .c3-btn{position:absolute;bottom:calc(max(14px,env(safe-area-inset-bottom)) + 76px);width:58px;height:58px;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;pointer-events:auto;cursor:pointer;background:rgba(17,17,17,.55);opacity:.6;box-shadow:0 3px 0 rgba(0,0,0,.45)}
 .c3-btn:active{background:var(--y);color:#111;opacity:1}
 #c3-left{left:12px}#c3-right{right:12px}
-.c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;text-align:center;padding:0 18px;gap:12px}
+.c3-bg{position:absolute;inset:0;overflow:hidden;background:#3b7fc4}
+.c3-bg canvas{position:absolute;left:-6%;top:-4%;width:112%;height:108%;will-change:transform}
+.c3-bg .sky{animation:c3zoom 46s ease-in-out infinite alternate}
+.c3-bg .c1{animation:c3drift 90s linear infinite}
+.c3-bg .c2{animation:c3drift 140s linear infinite reverse}
+.c3-bg .sun{animation:c3glow 6s ease-in-out infinite alternate}
+.c3-bg .land{animation:c3zoom 46s ease-in-out infinite alternate}
+.c3-bg.hidden{display:none}
+@keyframes c3zoom{from{transform:scale(1)}to{transform:scale(1.045)}}
+@keyframes c3drift{from{transform:translateX(-2.5%)}to{transform:translateX(2.5%)}}
+@keyframes c3glow{from{opacity:.85}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.c3-bg canvas{animation:none}}
+.c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:max(9vh,60px);pointer-events:auto;text-align:center;padding-left:18px;padding-right:18px;gap:10px}
 .c3-mark{width:min(92vw,400px);transform:rotate(-2deg);filter:drop-shadow(0 8px 0 rgba(0,0,0,.4)) drop-shadow(0 14px 24px rgba(0,0,0,.4))}
 .c3-mark svg{display:block}
 .c3-menu{display:flex;flex-direction:column;gap:9px;width:min(80vw,300px);margin-top:6px}
-.c3-menu .m{border-radius:9px;border:3px solid #fff;box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 4px 0 rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.35);background:linear-gradient(#22954f,#176e3a);color:#fff;font-family:${BIG_FONT};font-size:26px;letter-spacing:.06em;padding:11px 12px;cursor:pointer;text-transform:uppercase;line-height:1}
+.c3-menu .m{border-radius:9px;border:3px solid #fff;box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 4px 0 rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.35);background:linear-gradient(#22954f,#176e3a);color:#fff;font-family:${BIG_FONT};font-size:24px;letter-spacing:.06em;padding:9px 12px;cursor:pointer;text-transform:uppercase;line-height:1}
 .c3-menu .m small{display:block;font-family:${HUD_FONT};font-size:10px;letter-spacing:.2em;font-weight:700;opacity:.85;margin-top:3px}
 .c3-menu .m:active{transform:translateY(3px);box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 1px 0 rgba(0,0,0,.45)}
 .c3-menu .m.dim{filter:saturate(.4) brightness(.8)}
@@ -429,8 +441,9 @@ const HUD_HTML = `
   <div class="c3-banner" id="c3-banner"><div class="a"></div><div class="b"></div></div>
 </div>
 <div class="c3-flash" id="c3-flash"></div>
+<div class="c3-bg" id="c3-bg"><canvas class="sky"></canvas><canvas class="c2"></canvas><canvas class="sun"></canvas><canvas class="c1"></canvas><canvas class="land"></canvas></div>
 <div class="c3-title" id="c3-title">
-  <div class="eb">Saskatoon · Circle Drive approach · 2026</div>
+  <div class="eb">Saskatoon · Highway 16 overpass · posted 4.7 m</div>
   <div class="c3-mark"><svg viewBox="0 0 1000 420" width="100%" role="img" aria-label="BRIDGE STRIKE! Oversize load">
     <rect x="6" y="6" width="988" height="408" rx="34" fill="#f2b32a" stroke="#141414" stroke-width="12"/>
     <rect x="30" y="30" width="940" height="360" rx="20" fill="none" stroke="#141414" stroke-width="7"/>
@@ -501,7 +514,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     left: $('c3-left'), right: $('c3-right'), hint: $('c3-hint'), banner: $('c3-banner'), flash: $('c3-flash'),
     title: $('c3-title'), best: $('c3-best'), card: $('c3-card'), kind: $('c3-kind'), bname: $('c3-bname'), fkm: $('c3-fkm'),
     fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), frep: $('c3-frep'), ffine: $('c3-ffine'), restart: $('c3-restart'),
-    share: $('c3-share'), start: $('c3-start'), how: $('c3-how'), howto: $('c3-howto'), howback: $('c3-howback'), howgo: $('c3-howgo'), ticker: $('c3-ticker'), dispo: $('c3-dispo'), hl: $('c3-hl'),
+    bg: $('c3-bg'), share: $('c3-share'), start: $('c3-start'), how: $('c3-how'), howto: $('c3-howto'), howback: $('c3-howback'), howgo: $('c3-howgo'), ticker: $('c3-ticker'), dispo: $('c3-dispo'), hl: $('c3-hl'),
   };
 
   const scene = new THREE.Scene();
@@ -1141,6 +1154,74 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     chunks.push({ m, v: new THREE.Vector3(), av: new THREE.Vector3() });
   }
 
+  // ─── painted title backdrop: golden-hour overpass, drawn once per resize, parallax via CSS ───
+  function paintTitleBg() {
+    const W = Math.min(900, Math.round(root.clientWidth * 1.12 * Math.min(devicePixelRatio || 1, 2)));
+    const H = Math.round(W * (root.clientHeight * 1.08) / (root.clientWidth * 1.12));
+    if (!W || !H) return;
+    const cvs = Array.from(el.bg.querySelectorAll('canvas')) as HTMLCanvasElement[];
+    for (const c of cvs) { c.width = W; c.height = H; }
+    const [sky, c2, sunC, c1, land] = cvs.map((c) => c.getContext('2d')!);
+    const hz = H * 0.80; // horizon
+    // sky: deep blue zenith to pale gold horizon
+    const g = sky.createLinearGradient(0, 0, 0, hz);
+    g.addColorStop(0, '#2f78c4'); g.addColorStop(0.45, '#5ea3dc'); g.addColorStop(0.8, '#a9cfe6'); g.addColorStop(0.95, '#f1d9b3'); g.addColorStop(1, '#f8c98a');
+    sky.fillStyle = g; sky.fillRect(0, 0, W, H);
+    const gl = sky.createLinearGradient(0, hz, 0, H); gl.addColorStop(0, '#f6b877'); gl.addColorStop(0.08, '#d9b979'); gl.addColorStop(0.5, '#b89a5a'); gl.addColorStop(1, '#8a7440');
+    sky.fillStyle = gl; sky.fillRect(0, hz, W, H - hz);
+    // sun
+    const sx = W * 0.19, sy = hz - H * 0.006;
+    const sg = sunC.createRadialGradient(sx, sy, 0, sx, sy, W * 0.3);
+    sg.addColorStop(0, 'rgba(255,250,235,1)'); sg.addColorStop(0.08, 'rgba(255,240,200,0.98)'); sg.addColorStop(0.16, 'rgba(255,205,130,0.55)'); sg.addColorStop(0.5, 'rgba(255,180,90,0.18)'); sg.addColorStop(1, 'rgba(255,170,80,0)');
+    sunC.fillStyle = sg; sunC.fillRect(0, 0, W, H);
+    // cloud bands (soft streaks)
+    const band = (c: CanvasRenderingContext2D, y: number, len: number, th: number, a: number, x0: number) => {
+      for (let i = 0; i < 120; i++) {
+        const t = i / 120, x = x0 + t * len, yy = y + Math.sin(t * 9 + x0) * th * 0.35;
+        const r = th * (0.5 + 0.5 * Math.sin(t * Math.PI)) * (0.7 + 0.3 * Math.sin(i * 1.7));
+        const cg = c.createRadialGradient(x, yy, 0, x, yy, r * 2.2);
+        cg.addColorStop(0, `rgba(255,236,214,${a})`); cg.addColorStop(0.5, `rgba(235,214,200,${a * 0.5})`); cg.addColorStop(1, 'rgba(220,200,200,0)');
+        c.fillStyle = cg; c.beginPath(); c.ellipse(x, yy, r * 2.2, r * 0.9, 0, 0, Math.PI * 2); c.fill();
+      }
+    };
+    band(c1, H * 0.50, W * 0.92, H * 0.016, 0.85, W * 0.03);
+    band(c1, H * 0.615, W * 0.96, H * 0.013, 0.8, W * 0.0);
+    band(c2, H * 0.565, W * 0.8, H * 0.011, 0.6, W * 0.1);
+    band(c2, H * 0.68, W * 0.9, H * 0.009, 0.7, W * 0.06);
+    // far land: elevator + water tower silhouettes
+    land.fillStyle = '#6e6a63';
+    const ex = W * 0.71, eb = hz;
+    land.fillRect(ex, eb - H * 0.052, W * 0.04, H * 0.052); land.fillRect(ex + W * 0.04, eb - H * 0.032, W * 0.028, H * 0.032);
+    land.beginPath(); land.moveTo(ex, eb - H * 0.052); land.lineTo(ex + W * 0.02, eb - H * 0.066); land.lineTo(ex + W * 0.04, eb - H * 0.052); land.fill();
+    land.fillRect(ex - W * 0.03, eb - H * 0.02, W * 0.03, H * 0.02);
+    const tx = W * 0.84; land.fillRect(tx - W * 0.014, eb - H * 0.058, W * 0.028, H * 0.02); land.fillRect(tx - W * 0.003, eb - H * 0.04, W * 0.006, H * 0.04);
+    land.fillRect(tx - W * 0.012, eb - H * 0.04, W * 0.003, H * 0.04); land.fillRect(tx + W * 0.009, eb - H * 0.04, W * 0.003, H * 0.04);
+    // road: two-lane, vanishing at the horizon centre
+    const cx = W * 0.5, rb = W * 0.62; // half-width at the bottom
+    land.fillStyle = '#3a3b40'; land.beginPath(); land.moveTo(cx - rb, H); land.lineTo(cx - W * 0.006, hz + 2); land.lineTo(cx + W * 0.006, hz + 2); land.lineTo(cx + rb, H); land.fill();
+    land.fillStyle = '#f0e6cf';
+    land.beginPath(); land.moveTo(cx - rb + W * 0.03, H); land.lineTo(cx - W * 0.004, hz + 2); land.lineTo(cx - W * 0.003, hz + 2); land.lineTo(cx - rb + W * 0.045, H); land.fill();
+    land.beginPath(); land.moveTo(cx + rb - W * 0.03, H); land.lineTo(cx + W * 0.004, hz + 2); land.lineTo(cx + W * 0.003, hz + 2); land.lineTo(cx + rb - W * 0.045, H); land.fill();
+    land.fillStyle = '#e2b53a';
+    for (const o of [-1, 1]) { land.beginPath(); land.moveTo(cx + o * W * 0.006, H); land.lineTo(cx + o * W * 0.0008, hz + 2); land.lineTo(cx + o * W * 0.0016, hz + 2); land.lineTo(cx + o * W * 0.014, H); land.fill(); }
+    // overpass: deck, parapet, piers, embankments, clearance plate, chevrons
+    const dy = H * 0.665, dh = H * 0.052;
+    land.fillStyle = '#a89f92'; land.fillRect(0, dy - H * 0.012, W, H * 0.012); // parapet
+    land.fillStyle = '#5c5851'; for (let x = 0; x < W; x += W * 0.09) land.fillRect(x, dy - H * 0.022, 3, H * 0.012);
+    const dg = land.createLinearGradient(0, dy, 0, dy + dh); dg.addColorStop(0, '#8f877b'); dg.addColorStop(1, '#5b564e');
+    land.fillStyle = dg; land.fillRect(0, dy, W, dh);
+    land.fillStyle = '#6a655d';
+    land.fillRect(0, dy + dh, W * 0.12, hz - dy - dh + H * 0.03); land.fillRect(W * 0.88, dy + dh, W * 0.12, hz - dy - dh + H * 0.03);
+    land.fillStyle = '#8a7d5c';
+    land.beginPath(); land.moveTo(0, hz + H * 0.06); land.lineTo(0, dy + dh); land.lineTo(W * 0.12, dy + dh + H * 0.02); land.lineTo(W * 0.2, hz + H * 0.06); land.fill();
+    land.beginPath(); land.moveTo(W, hz + H * 0.06); land.lineTo(W, dy + dh); land.lineTo(W * 0.88, dy + dh + H * 0.02); land.lineTo(W * 0.8, hz + H * 0.06); land.fill();
+    for (const px of [W * 0.06, W * 0.94]) { land.fillStyle = '#111'; land.fillRect(px - W * 0.012, hz - H * 0.06, W * 0.024, H * 0.05); land.fillStyle = '#f2b32a'; for (let k = 0; k < 4; k++) land.fillRect(px - W * 0.012, hz - H * 0.06 + k * H * 0.0125, W * 0.024, H * 0.006); }
+    const pw = W * 0.1, ph = H * 0.022, pxp = cx - pw / 2, pyp = dy + dh * 0.5 - ph / 2;
+    land.fillStyle = '#111'; land.fillRect(pxp - 3, pyp - 3, pw + 6, ph + 6); land.fillStyle = '#f2c12e'; land.fillRect(pxp, pyp, pw, ph);
+    land.fillStyle = '#111'; land.font = `700 ${Math.round(ph * 0.78)}px ${PLATE_FONT}`; land.textAlign = 'center'; land.textBaseline = 'middle'; land.fillText('4.7 m', cx, pyp + ph * 0.55);
+  }
+  function setTitleBg(on: boolean) { el.bg.classList.toggle('hidden', !on); if (on) paintTitleBg(); }
+
   // ─── audio: synthesized diesel, jake brake, air, shave zing, crunch (muted until the speaker is tapped) ───
   const audio = {
     ctx: null as AudioContext | null, on: false, master: null as GainNode | null,
@@ -1297,6 +1378,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function beginRun() {
     resetRun();
     G.phase = 'run';
+    setTitleBg(false);
     el.title.classList.add('hidden');
     el.hud.classList.remove('hidden');
     let seen = false; try { seen = localStorage.getItem('clr3d.seen') === '1'; localStorage.setItem('clr3d.seen', '1'); } catch { /* ignore */ }
@@ -1685,7 +1767,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     updateCamera(dtReal);
     if (G.phase !== 'title') updateHud();
     audioTick();
-    renderer.render(scene, camera);
+    if (G.phase !== 'title') renderer.render(scene, camera);
   }
   function resize() {
     const w = root.clientWidth || innerWidth, h = root.clientHeight || innerHeight;
@@ -1694,7 +1776,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     renderer.setSize(w, h, false);
   }
   resize();
-  const ro = new ResizeObserver(resize);
+  const ro = new ResizeObserver(() => { resize(); if (G.phase === 'title') paintTitleBg(); });
   ro.observe(root);
 
   // ─── input ───
@@ -1783,6 +1865,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   loadModel(opts.modelUrl || '/models/peterbilt.glb');
   el.best.textContent = G.best > 0 ? `Best haul ${G.best.toFixed(2)} km` : '';
   resetRun();
+  setTitleBg(true);
   placeWorld(0);
   raf = requestAnimationFrame(frame);
 
