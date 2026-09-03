@@ -1,6 +1,6 @@
 // Bundles src/game3d/game.ts + three into a single self-contained HTML file (dist/clearance.html).
 import { build } from 'esbuild';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 
 const res = await build({
   entryPoints: ['src/game3d/game.ts'],
@@ -13,6 +13,7 @@ const res = await build({
   legalComments: 'none',
 });
 const js = res.outputFiles[0].text;
+const glb = readFileSync('public/models/peterbilt.glb').toString('base64');
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -23,7 +24,7 @@ const html = `<!doctype html>
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#0b1020;overscroll-behavior:none}#game{position:fixed;inset:0}</style>
 </head><body><div id="game"></div>
 <script>${js}</script>
-<script>Clearance.startGame(document.getElementById('game'));</script>
+<script>Clearance.startGame(document.getElementById('game'), { modelUrl: 'data:model/gltf-binary;base64,${glb}' });</script>
 </body></html>`;
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/clearance.html', html);

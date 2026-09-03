@@ -5,6 +5,8 @@
  * See PLAN.md for state shape, world scroll and collision spans.
  */
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 // ───────────────────────────── tuning ─────────────────────────────
 const LANE_X = [-3.8, 0, 3.8];
@@ -55,6 +57,11 @@ const DISPATCH = [
   { id: 'hammer2', text: 'Hammer down under 2 bridges', goal: 2 },
   { id: 'clear8', text: 'Clear 8 bridges', goal: 8 },
 ];
+
+// ───────────────────────────── terrain (vertical curves) ─────────────────────────────
+// Gentle prairie crests: enough to hide a plate behind a rise, never a real hill.
+const hAt = (w: number) => 4.0 * Math.sin(w / 300) + 2.2 * Math.sin(w / 113 + 2.1) + 0.5 * Math.sin(w / 41);
+const slopeAt = (w: number) => (4.0 / 300) * Math.cos(w / 300) + (2.2 / 113) * Math.cos(w / 113 + 2.1) + (0.5 / 41) * Math.cos(w / 41);
 
 // ───────────────────────────── utilities ─────────────────────────────
 function mulberry32(seed: number) {
@@ -269,9 +276,10 @@ export interface GameSnapshot {
   crashKind: string | null; tod: number; waypoint: { name: string; remaining: number; clock: number } | null;
   dispatch: { text: string; progress: number; goal: number } | null;
   bridges: { w: number; depth: number; kind: string; name: string; clears: number[]; verdicts: Verdict[] }[];
+  traffic: { w: number; len: number; lane: number; v: number }[];
 }
 declare global {
-  interface Window { __game?: () => GameSnapshot; __gameWarp?: (metres: number) => void; __gameInput?: (action: string) => void; __gameStep?: (seconds: number) => void }
+  interface Window { __game?: () => GameSnapshot; __gameWarp?: (metres: number) => void; __gameInput?: (action: string) => void; __gameStep?: (seconds: number) => void; __gameCam?: (pos: number[] | null, target?: number[]) => void }
 }
 
 // ───────────────────────────── HUD ─────────────────────────────
@@ -291,8 +299,8 @@ const CSS = `
 .c3-view{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8;pointer-events:auto;cursor:pointer;padding:4px 0}
 .c3-snd{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8;pointer-events:auto;cursor:pointer;padding:4px 0}
 .c3-next{position:absolute;top:calc(max(14px,env(safe-area-inset-top)) + 78px);left:50%;transform:translateX(-50%);display:flex;gap:18px}
-.c3-chip{width:64px;text-align:center;font-variant-numeric:tabular-nums}
-.c3-chip .h{font-size:20px;letter-spacing:.04em;line-height:1.1}
+.c3-chip{width:58px;text-align:center;font-variant-numeric:tabular-nums}
+.c3-chip .h{font-size:18px;letter-spacing:.04em;line-height:1.1}
 .c3-chip .v{font-size:9px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin-top:1px}
 .c3-chip .bar{height:3px;margin-top:4px;background:rgba(239,230,211,.3);border-radius:2px}
 .c3-chip.fit .bar{background:#5fd68a}.c3-chip.steady .bar{background:#f2b32a}.c3-chip.no .bar{background:#e0463a}
@@ -304,6 +312,7 @@ const CSS = `
 .c3-bl .sp small{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
 .c3-bl .mode{font-size:12px;letter-spacing:.26em;text-transform:uppercase;font-weight:600;margin-top:4px;min-height:14px}
 .c3-bl .mode.hammer{color:#f0a05a}.c3-bl .mode.brake{color:#8fd0ff}
+.c3-bl .disp{font-size:11px;letter-spacing:.12em;opacity:.75;margin-top:6px;line-height:1.3;min-height:14px}
 .c3-br{position:absolute;right:16px;bottom:max(18px,env(safe-area-inset-bottom));width:190px;text-align:right}
 .c3-br .sc{font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
 .c3-br .sc small{font-size:13px;letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
@@ -319,7 +328,7 @@ const CSS = `
 .c3-banner .b{font-size:14px;letter-spacing:.3em;text-transform:uppercase;color:#ffd27a;margin-top:6px}
 .c3-banner.warn .a{color:#f0a05a}
 .c3-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
-.c3-btn{position:absolute;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 150px);width:54px;height:54px;border:1px solid rgba(239,230,211,.55);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;pointer-events:auto;cursor:pointer;background:rgba(6,10,20,.28);backdrop-filter:blur(3px)}
+.c3-btn{position:absolute;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 150px);width:56px;height:56px;border:1px solid rgba(239,230,211,.35);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;pointer-events:auto;cursor:pointer;background:rgba(6,10,20,.18);opacity:.55}
 .c3-btn:active{background:rgba(239,230,211,.85);color:#111}
 #c3-left{left:14px}#c3-right{right:14px}
 .c3-title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;text-align:center;padding:0 20px;background:linear-gradient(rgba(4,8,18,.15),rgba(4,8,18,.55))}
@@ -349,32 +358,27 @@ const HUD_HTML = `
 <div class="c3-vig"></div>
 <div class="c3-hud hidden" id="c3-hud">
   <div class="c3-wp"><div class="n" id="c3-wpn">—</div><div class="t" id="c3-wpt">—</div></div>
+  <div class="c3-snd" id="c3-snd">Sound off</div>
   <div class="c3-view" id="c3-view">Chase</div>
   <div class="c3-next" id="c3-next">
     <div class="c3-chip" id="c3-chip0"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
     <div class="c3-chip" id="c3-chip1"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
     <div class="c3-chip" id="c3-chip2"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
   </div>
-  <div class="c3-disp"><div class="c3-lbl">Dispatch</div><div class="c3-rule"></div><div class="d" id="c3-dt">—</div><div class="p" id="c3-dp"></div></div>
-  <div class="c3-bl"><div class="c3-lbl">Speed</div><div class="c3-rule"></div><div class="sp"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div></div>
+  <div class="c3-bl"><div class="c3-lbl">Speed</div><div class="c3-rule"></div><div class="sp"><span id="c3-sp">0</span><small>km/h</small></div><div class="mode" id="c3-mode">Full ahead</div><div class="disp" id="c3-disp"></div></div>
   <div class="c3-br"><div class="c3-lbl">Distance made good</div><div class="c3-rule"></div><div class="sc"><span id="c3-km">0.00</span><small>km</small></div>
-    <div class="row"><span>Load</span><span id="c3-h">4.30 m</span></div><div class="row"><span>Cleared</span><span id="c3-cl">0</span></div><div class="row mult" id="c3-mult"></div></div>
+    <div class="row"><span>Load</span><span id="c3-h">4.30 m</span></div><div class="row mult" id="c3-mult"></div></div>
   <div class="c3-btn" id="c3-left">◀</div><div class="c3-btn" id="c3-right">▶</div>
   <div class="c3-hint" id="c3-hint">Swipe to change lane · Hold to brake · Swipe down to hammer</div>
   <div class="c3-banner" id="c3-banner"><div class="a"></div><div class="b"></div></div>
 </div>
 <div class="c3-flash" id="c3-flash"></div>
 <div class="c3-title" id="c3-title">
-  <div class="eb">Saskatchewan Highways · Oversize permit not obtained</div>
+  <div class="eb">Saskatoon · Circle Drive approach</div>
   <div class="lg">Clearance</div>
-  <div class="sub">Saskatoon · Circle Drive approach · 4.30 m of steel</div>
-  <div class="cards">
-    <div class="card"><b>The Haul</b><i>Endless run into the overpass district</i></div>
-    <div class="card"><b>Read the plates</b><i>Yellow signs post each lane's clearance</i></div>
-    <div class="card"><b>Brake to steady</b><i>A swaying load rides taller than it is</i></div>
-  </div>
+  <div class="sub">One steel truss. Eleven overpasses. No permit.</div>
   <div class="tap">Tap to haul</div>
-  <div class="keys">Swipe ◀ ▶ lane · hold to brake · swipe ▼ hammer down<br>Keys ← → · Space · S · C view</div>
+  <div class="keys">Swipe ◀ ▶ lane · hold to brake · swipe ▼ hammer down<br>Keys ← → · Space · S · C view · M sound</div>
   <div class="gc" id="c3-best"></div>
 </div>
 <div class="c3-card" id="c3-card"><div class="c3-panel">
@@ -387,7 +391,7 @@ const HUD_HTML = `
 </div></div>`;
 
 // ───────────────────────────── the game ─────────────────────────────
-export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () => void {
+export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: string; sound?: boolean } = {}): () => void {
   root.classList.add('c3-root');
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -410,7 +414,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   const $ = (id: string) => wrap.querySelector<HTMLElement>('#' + id)!;
   const el = {
     hud: $('c3-hud'), wpn: $('c3-wpn'), wpt: $('c3-wpt'), view: $('c3-view'), chips: [$('c3-chip0'), $('c3-chip1'), $('c3-chip2')],
-    dt: $('c3-dt'), dp: $('c3-dp'), sp: $('c3-sp'), mode: $('c3-mode'), km: $('c3-km'), h: $('c3-h'), cl: $('c3-cl'), mult: $('c3-mult'),
+    disp: $('c3-disp'), snd: $('c3-snd'), sp: $('c3-sp'), mode: $('c3-mode'), km: $('c3-km'), h: $('c3-h'), cl: $('c3-cl'), mult: $('c3-mult'),
     left: $('c3-left'), right: $('c3-right'), hint: $('c3-hint'), banner: $('c3-banner'), flash: $('c3-flash'),
     title: $('c3-title'), best: $('c3-best'), card: $('c3-card'), kind: $('c3-kind'), bname: $('c3-bname'), fkm: $('c3-fkm'),
     fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), restart: $('c3-restart'),
@@ -495,10 +499,16 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   void dbg;
 
   // ─── ground, road, median ───
-  grass.map.repeat.set(60, 60);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), mat.grass);
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.35; ground.receiveShadow = true;
-  scene.add(ground);
+  grass.map.repeat.set(60, 26);
+  // every ground strip is a plane with rows along the road; rows are re-heighted each frame from hAt()
+  const strips: THREE.Mesh[] = [];
+  const strip = (w: number, len: number, rows: number, m: THREE.Material, x: number, y: number, zc: number) => {
+    const g = new THREE.PlaneGeometry(w, len, 1, rows);
+    const mesh = new THREE.Mesh(g, m);
+    mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, y, zc); mesh.receiveShadow = true;
+    scene.add(mesh); strips.push(mesh); return mesh;
+  };
+  const ground = strip(2600, 1150, 115, mat.grass, 0, -0.35, -1150 / 2 + 120);
   const fieldTex = [
     fieldMaps(rngFx, '#e3c22b', '#f0d24a', '#c9a81c'), // canola
     fieldMaps(rngFx, '#c9a95a', '#d9bb6c', '#a98c40'), // wheat
@@ -510,24 +520,32 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   for (let i = 0; i < 10; i++) for (const side of [-1, 1]) {
     const t = fieldTex[(i + (side > 0 ? 2 : 0)) % 4];
     t.repeat.set(24, 12);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(340, 200), new THREE.MeshStandardMaterial({ map: t, roughness: 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(340, 200, 1, 20), new THREE.MeshStandardMaterial({ map: t, roughness: 1, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
     m.rotation.x = -Math.PI / 2; m.position.y = -0.3; m.receiveShadow = true;
-    scene.add(m);
+    scene.add(m); strips.push(m);
     fields.push({ m, w: i * 200, x: side * (170 + 34), span: 10 * 200 });
   }
   asphalt.map.repeat.set(1, 30); asphalt.rough.repeat.set(1, 30);
   const ROAD_LEN = 760;
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN), mat.asphalt);
-  road.rotation.x = -Math.PI / 2; road.position.set(0, 0.0, -ROAD_LEN / 2 + 60); road.receiveShadow = true;
-  scene.add(road);
-  const shoulder = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2 + 5, ROAD_LEN), mat.gravel);
-  shoulder.rotation.x = -Math.PI / 2; shoulder.position.set(0, -0.12, -ROAD_LEN / 2 + 60); shoulder.receiveShadow = true;
-  scene.add(shoulder);
+  const ROAD2_X = -ROAD_HALF * 2 - 14;
+  strip(ROAD_HALF * 2, ROAD_LEN, 190, mat.asphalt, 0, 0.0, -ROAD_LEN / 2 + 60);
+  strip(ROAD_HALF * 2 + 5, ROAD_LEN, 190, mat.gravel, 0, -0.12, -ROAD_LEN / 2 + 60);
   // oncoming carriageway across a grass median (divided highway like the photo)
-  const road2 = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, ROAD_LEN), mat.asphalt);
-  road2.rotation.x = -Math.PI / 2; road2.rotation.z = Math.PI; road2.position.set(-ROAD_HALF * 2 - 14, 0.0, -ROAD_LEN / 2 + 60); road2.receiveShadow = true;
-  scene.add(road2);
-  const shoulder2 = shoulder.clone(); shoulder2.position.x = road2.position.x; scene.add(shoulder2);
+  const road2 = strip(ROAD_HALF * 2, ROAD_LEN, 190, mat.asphalt, ROAD2_X, 0.0, -ROAD_LEN / 2 + 60);
+  road2.rotation.z = Math.PI;
+  strip(ROAD_HALF * 2 + 5, ROAD_LEN, 190, mat.gravel, ROAD2_X, -0.12, -ROAD_LEN / 2 + 60);
+  function deformStrips(d: number, h0: number) {
+    for (const m of strips) {
+      const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+      const arr = pos.array as Float32Array;
+      const flip = m.rotation.z !== 0 ? -1 : 1;
+      for (let i = 0; i < pos.count; i++) {
+        const yl = arr[i * 3 + 1] * flip; // local +y maps to world -z
+        arr[i * 3 + 2] = hAt(d - m.position.z + yl) - h0;
+      }
+      pos.needsUpdate = true;
+    }
+  }
 
   // ─── instanced roadside scatter ───
   const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpP = new THREE.Vector3(), tmpS = new THREE.Vector3();
@@ -687,45 +705,47 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   const cab = new THREE.Group();
   cab.position.z = -11.2;
   truck.add(cab);
-  box(1.0, 0.4, 7.6, mat.frame, 0, 0.95, -2.6, cab); // frame rails
-  for (const z of [0.0, 1.3]) for (const x of [-1.05, 1.05]) addWheel(x, z, true, cab); // tandem drive
-  for (const x of [-1.05, 1.05]) addWheel(x, -5.2, false, cab); // steer axle
+  const cabProc = new THREE.Group(); // procedural stand-in until the Peterbilt loads
+  cab.add(cabProc);
+  box(1.0, 0.4, 7.6, mat.frame, 0, 0.95, -2.6, cabProc); // frame rails
+  for (const z of [0.0, 1.3]) for (const x of [-1.05, 1.05]) addWheel(x, z, true, cabProc); // tandem drive
+  for (const x of [-1.05, 1.05]) addWheel(x, -5.2, false, cabProc); // steer axle
   // sleeper + cab
-  const sleeper = box(2.5, 2.1, 2.0, mat.paint, 0, 2.2, -1.2, cab);
-  const cabBox = box(2.45, 1.75, 1.7, mat.paint, 0, 2.15, -3.0, cab);
-  box(2.4, 0.5, 2.2, mat.paint, 0, 3.5, -1.15, cab); // roof fairing base
-  const fairing = box(2.3, 0.9, 1.6, mat.paint, 0, 3.75, -0.9, cab);
+  const sleeper = box(2.5, 2.1, 2.0, mat.paint, 0, 2.2, -1.2, cabProc);
+  const cabBox = box(2.45, 1.75, 1.7, mat.paint, 0, 2.15, -3.0, cabProc);
+  box(2.4, 0.5, 2.2, mat.paint, 0, 3.5, -1.15, cabProc); // roof fairing base
+  const fairing = box(2.3, 0.9, 1.6, mat.paint, 0, 3.75, -0.9, cabProc);
   fairing.rotation.x = 0.25;
-  const wind = box(2.3, 0.8, 0.06, mat.glass, 0, 2.5, -3.88, cab, false);
-  box(0.06, 0.6, 0.8, mat.glass, -1.24, 2.5, -3.1, cab, false); box(0.06, 0.6, 0.8, mat.glass, 1.24, 2.5, -3.1, cab, false); // door glass
-  box(0.06, 0.5, 0.6, mat.glass, -1.26, 2.6, -1.3, cab, false); box(0.06, 0.5, 0.6, mat.glass, 1.26, 2.6, -1.3, cab, false); // sleeper windows
+  const wind = box(2.3, 0.8, 0.06, mat.glass, 0, 2.5, -3.88, cabProc, false);
+  box(0.06, 0.6, 0.8, mat.glass, -1.24, 2.5, -3.1, cabProc, false); box(0.06, 0.6, 0.8, mat.glass, 1.24, 2.5, -3.1, cabProc, false); // door glass
+  box(0.06, 0.5, 0.6, mat.glass, -1.26, 2.6, -1.3, cabProc, false); box(0.06, 0.5, 0.6, mat.glass, 1.26, 2.6, -1.3, cabProc, false); // sleeper windows
   void sleeper; void cabBox; void wind;
   // long hood
-  const hood = box(2.1, 1.25, 2.7, mat.paint, 0, 1.85, -5.2, cab);
+  const hood = box(2.1, 1.25, 2.7, mat.paint, 0, 1.85, -5.2, cabProc);
   void hood;
-  box(2.15, 1.3, 0.12, mat.chrome, 0, 1.75, -6.55, cab); // grille surround
-  box(1.6, 1.0, 0.02, new THREE.MeshStandardMaterial({ color: '#0d0f12', roughness: 0.4, metalness: 0.8 }), 0, 1.75, -6.62, cab, false);
-  box(2.5, 0.35, 0.3, mat.chrome, 0, 0.95, -6.7, cab); // bumper
-  const headL = cyl(0.17, 0.06, mat.lampFace, -0.85, 1.35, -6.6, 'z', cab, 12);
-  const headR = cyl(0.17, 0.06, mat.lampFace, 0.85, 1.35, -6.6, 'z', cab, 12);
+  box(2.15, 1.3, 0.12, mat.chrome, 0, 1.75, -6.55, cabProc); // grille surround
+  box(1.6, 1.0, 0.02, new THREE.MeshStandardMaterial({ color: '#0d0f12', roughness: 0.4, metalness: 0.8 }), 0, 1.75, -6.62, cabProc, false);
+  box(2.5, 0.35, 0.3, mat.chrome, 0, 0.95, -6.7, cabProc); // bumper
+  const headL = cyl(0.17, 0.06, mat.lampFace, -0.85, 1.35, -6.6, 'z', cabProc, 12);
+  const headR = cyl(0.17, 0.06, mat.lampFace, 0.85, 1.35, -6.6, 'z', cabProc, 12);
   // fenders over steer wheels: half cylinders
   for (const x of [-1.05, 1.05]) {
     const f = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.5, 14, 1, false, 0, Math.PI), mat.paint);
-    f.rotation.z = Math.PI / 2; f.rotation.y = Math.PI / 2; f.position.set(x, 0.62, -5.2); f.castShadow = true; cab.add(f);
+    f.rotation.z = Math.PI / 2; f.rotation.y = Math.PI / 2; f.position.set(x, 0.62, -5.2); f.castShadow = true; cabProc.add(f);
   }
   // stacks, tanks, mirrors, steps
   for (const x of [-1.35, 1.35]) {
-    cyl(0.1, 3.4, mat.chrome, x, 2.6, -1.9, 'y', cab, 10);
-    cyl(0.16, 0.9, mat.chrome, x, 1.3, -1.9, 'y', cab, 10);
-    cyl(0.33, 1.5, mat.chrome, x * 0.95, 0.95, -3.3, 'z', cab, 14); // fuel tank
-    box(0.6, 0.06, 0.6, mat.chrome, x, 0.55, -3.3, cab); // step
-    box(0.05, 0.05, 1.0, mat.frame, x * 1.02, 2.9, -3.6, cab); // mirror arm
-    box(0.04, 0.55, 0.22, mat.chrome, x * 1.1, 2.75, -4.1, cab);
+    cyl(0.1, 3.4, mat.chrome, x, 2.6, -1.9, 'y', cabProc, 10);
+    cyl(0.16, 0.9, mat.chrome, x, 1.3, -1.9, 'y', cabProc, 10);
+    cyl(0.33, 1.5, mat.chrome, x * 0.95, 0.95, -3.3, 'z', cabProc, 14); // fuel tank
+    box(0.6, 0.06, 0.6, mat.chrome, x, 0.55, -3.3, cabProc); // step
+    box(0.05, 0.05, 1.0, mat.frame, x * 1.02, 2.9, -3.6, cabProc); // mirror arm
+    box(0.04, 0.55, 0.22, mat.chrome, x * 1.1, 2.75, -4.1, cabProc);
   }
   // cab roof marker lights + bug deflector chrome
   const roofMarkers: THREE.Mesh[] = [];
-  for (const x of [-0.8, -0.4, 0, 0.4, 0.8]) roofMarkers.push(box(0.1, 0.07, 0.07, mat.amber, x, 4.22, -1.1, cab, false));
-  const hoodLamps = [box(0.1, 0.07, 0.07, mat.amber, -1.0, 2.5, -6.5, cab, false), box(0.1, 0.07, 0.07, mat.amber, 1.0, 2.5, -6.5, cab, false)];
+  for (const x of [-0.8, -0.4, 0, 0.4, 0.8]) roofMarkers.push(box(0.1, 0.07, 0.07, mat.amber, x, 4.22, -1.1, cabProc, false));
+  const hoodLamps = [box(0.1, 0.07, 0.07, mat.amber, -1.0, 2.5, -6.5, cabProc, false), box(0.1, 0.07, 0.07, mat.amber, 1.0, 2.5, -6.5, cabProc, false)];
   // headlight spots (night)
   const spots: THREE.SpotLight[] = [];
   for (const x of [-0.85, 0.85]) {
@@ -735,6 +755,42 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     cab.add(s, s.target);
     spots.push(s);
   }
+  // ─── the Peterbilt (GLB, meshopt-compressed; recoloured by mesh group) ───
+  const modelWheels: THREE.Mesh[] = [];
+  let modelLoaded = false;
+  const paintMat = mat.paint;
+  const modelMats: Record<string, THREE.Material> = {
+    '000000||': paintMat, '151616||': paintMat, 'c6c6c6||#paint': paintMat, 'ffffff||': paintMat,
+    'c6c6c6||#chrome': mat.chrome, 'cccccc||': mat.chrome, 'c0c0c0||': mat.chrome,
+    '1e1e1e||': mat.frame, '232323||': mat.frame, '2d2d2d||': new THREE.MeshStandardMaterial({ color: '#0f1113', roughness: 0.45, metalness: 0.7 }),
+    '212121||a': mat.glass, '808080||a': mat.glass, 'ffffff|__Translucent_Glass_Gold_1.jpg|a': mat.glass,
+    'ff7f00||': mat.amber,
+  };
+  const wheelMat = new THREE.MeshStandardMaterial({ color: '#1a1b1d', roughness: 0.95 });
+  function loadModel(url: string) {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(url, (gltf) => {
+      const m = gltf.scene;
+      m.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const name = o.name;
+        let mm: THREE.Material | undefined = modelMats[name];
+        if (name.includes('#wheel')) { mm = wheelMat; modelWheels.push(o); }
+        if (!mm) mm = name.endsWith('a') ? mat.glass : mat.chrome;
+        mm = mm.clone(); mm.side = THREE.DoubleSide; (mm as THREE.MeshStandardMaterial).flatShading = true;
+        o.material = mm; o.castShadow = true; o.receiveShadow = true;
+      });
+      // model: +z forward, x 0..4.1, tires touch y=-0.4; game: -z forward, fifth wheel at the cab group origin
+      m.rotation.y = Math.PI;
+      m.position.set(2.06, 0.4, 1.7);
+      cab.add(m);
+      cabProc.visible = false;
+      for (const sp of spots) { sp.position.set(sp.position.x, 1.25, -9.4); }
+      modelLoaded = true;
+    }, undefined, (err) => console.warn('truck model failed to load, keeping the stand-in', err));
+  }
+
   // ─── the load: galvanized steel truss (a bridge girder, of course) ───
   const loadG = new THREE.Group();
   truck.add(loadG);
@@ -777,6 +833,71 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   }
   const loadMarkers: THREE.Mesh[] = [];
   for (const z of [-LOAD_Z0 - 0.3, -LOAD_Z1 + 0.3]) for (const x of [-LOAD_HALF_W, LOAD_HALF_W]) loadMarkers.push(box(0.1, 0.1, 0.1, mat.amber, x, BED_H + 0.2, z, loadG, false));
+  // ─── traffic: half-tons and grain trucks in our lanes, oncoming on the far carriageway ───
+  interface Vehicle { g: THREE.Group; w: number; x: number; v: number; len: number; kind: 'pickup' | 'grain'; lane: number; active: boolean; lights: THREE.Mesh[]; wheels: THREE.Mesh[] }
+  const VEH_COLORS = ['#e8e6df', '#b9bec4', '#7a1f1a', '#2b4a7a', '#1b1c1e', '#4d6b3a', '#c8c2b0'];
+  const vehWheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.3, 14); vehWheelGeo.rotateZ(Math.PI / 2);
+  const bigWheelGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.6, 14); bigWheelGeo.rotateZ(Math.PI / 2);
+  const headMat = new THREE.MeshStandardMaterial({ color: '#f6f3e6', emissive: '#fff2c8', emissiveIntensity: 0 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: '#7a1010', emissive: '#ff2a1a', emissiveIntensity: 0 });
+  function makeVehicle(kind: 'pickup' | 'grain', col: string): Vehicle {
+    const g = new THREE.Group();
+    const paint = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.4, metalness: 0.3, clearcoat: 0.5 });
+    const lights: THREE.Mesh[] = []; const wheelsV: THREE.Mesh[] = [];
+    const B = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, shadow = true) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = shadow; g.add(b); return b;
+    };
+    if (kind === 'pickup') {
+      B(1.95, 0.55, 5.4, paint, 0, 0.78, 0); // body
+      B(1.85, 0.62, 1.7, paint, 0, 1.36, 0.3); // cab
+      B(1.75, 0.5, 1.3, mat.glass, 0, 1.4, 0.3, false);
+      B(1.9, 0.45, 2.3, paint, 0, 0.98, -1.5); // box walls
+      lights.push(B(0.35, 0.12, 0.05, headMat, -0.7, 0.85, 2.72, false), B(0.35, 0.12, 0.05, headMat, 0.7, 0.85, 2.72, false));
+      lights.push(B(0.3, 0.14, 0.05, tailMat, -0.8, 0.9, -2.72, false), B(0.3, 0.14, 0.05, tailMat, 0.8, 0.9, -2.72, false));
+      for (const z of [1.7, -1.7]) for (const x of [-0.85, 0.85]) { const w = new THREE.Mesh(vehWheelGeo, mat.rubber); w.position.set(x, 0.42, z); g.add(w); wheelsV.push(w); }
+    } else {
+      B(2.4, 1.1, 2.3, paint, 0, 1.6, 2.6); // cab
+      B(2.3, 0.7, 0.06, mat.glass, 0, 1.85, 3.78, false);
+      B(2.2, 0.9, 1.4, paint, 0, 1.0, 4.1); // hood
+      B(2.5, 2.3, 6.2, paint, 0, 2.05, -1.5); // grain box
+      B(2.55, 0.25, 6.3, mat.hazard, 0, 0.75, -1.5, false);
+      B(1.2, 0.5, 8.5, mat.frame, 0, 0.55, 0.5);
+      lights.push(B(0.32, 0.16, 0.05, headMat, -0.85, 1.0, 4.82, false), B(0.32, 0.16, 0.05, headMat, 0.85, 1.0, 4.82, false));
+      lights.push(B(0.3, 0.18, 0.05, tailMat, -1.05, 1.1, -4.62, false), B(0.3, 0.18, 0.05, tailMat, 1.05, 1.1, -4.62, false));
+      for (const z of [3.6, -1.6, -3.0]) for (const x of [-1.0, 1.0]) { const w = new THREE.Mesh(bigWheelGeo, mat.rubber); w.position.set(x, 0.52, z); g.add(w); wheelsV.push(w); }
+    }
+    g.visible = false;
+    scene.add(g);
+    return { g, w: 0, x: 0, v: 0, len: kind === 'pickup' ? 5.5 : 9.7, kind, lane: 1, active: false, lights, wheels: wheelsV };
+  }
+  const traffic: Vehicle[] = [];
+  const oncoming: Vehicle[] = [];
+  for (let i = 0; i < 6; i++) traffic.push(makeVehicle(i % 3 === 0 ? 'grain' : 'pickup', VEH_COLORS[Math.floor(rngFx() * VEH_COLORS.length)]));
+  for (let i = 0; i < 6; i++) oncoming.push(makeVehicle(i % 2 === 0 ? 'grain' : 'pickup', VEH_COLORS[Math.floor(rngFx() * VEH_COLORS.length)]));
+  for (const v of oncoming) v.g.rotation.y = Math.PI; // faces +z (toward the camera)
+  function nearBridge(w: number, before = 70, after = 30) {
+    for (const b of bridges) if (b.active && w > b.w - before && w < b.w + b.depth + after) return true;
+    return false;
+  }
+  function spawnTraffic() {
+    if (G.dist < 250) return; // clear road for the first two gimme bridges
+    const ahead = traffic.filter((v) => v.active);
+    if (ahead.length >= 4) return;
+    const v = traffic.find((t) => !t.active);
+    if (!v) return;
+    let w = G.dist + 260 + rngWorld() * 260;
+    let tries = 0;
+    while (tries++ < 8 && (nearBridge(w) || ahead.some((o) => Math.abs(o.w - w) < 110))) w += 45 + rngWorld() * 60;
+    if (tries >= 8) return;
+    const lane = Math.floor(rngWorld() * 3);
+    v.w = w; v.lane = lane; v.x = LANE_X[lane]; v.v = (0.52 + rngWorld() * 0.22); v.active = true; v.g.visible = true;
+  }
+  function spawnOncoming() {
+    const v = oncoming.find((t) => !t.active);
+    if (!v || rngFx() > 0.02) return;
+    v.w = G.dist + 520 + rngFx() * 260; v.x = ROAD2_X + (rngFx() < 0.5 ? -1.9 : 1.9); v.v = 22 + rngFx() * 9; v.active = true; v.g.visible = true;
+  }
+
   // marker bar at next bridge
   const marker = new THREE.Mesh(new THREE.BoxGeometry(LOAD_HALF_W * 2, 0.06, 0.3), new THREE.MeshBasicMaterial({ color: '#5fd68a', fog: false }));
   marker.visible = false;
@@ -835,6 +956,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       const berm = new THREE.Mesh(bermGeo, mat.grass); berm.name = 'berm'; berm.receiveShadow = true; group.add(berm); abut.push(berm);
     }
     const nameSign = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.1), railNameMat); nameSign.name = 'railname'; nameSign.visible = false; group.add(nameSign);
+    // the deck continues over the median and the oncoming carriageway (no plates there)
+    const ext = new THREE.Mesh(railTieGeo, mat.concrete); ext.name = 'ext'; ext.castShadow = true; ext.receiveShadow = true; group.add(ext);
+    for (let i = 0; i < 2; i++) { const p = new THREE.Mesh(new THREE.CylinderGeometry(PIER_R, PIER_R * 1.15, 1, 18), mat.concrete); p.name = 'extpier' + i; p.castShadow = true; group.add(p); }
     return { id: 0, w: 0, depth: 10, kind: 'girder', name: '', lanes, group, piers, abut, cleared: false, minMargin: 9, active: false, faceHidden: false, brakedUnder: false, hammeredUnder: false };
   }
   for (let i = 0; i < 8; i++) bridges.push(makeBridge());
@@ -875,7 +999,14 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       const hA = lane.clear + 0.4;
       const wall = b.abut[i * 2], berm = b.abut[i * 2 + 1];
       wall.position.set(side * (ROAD_HALF + 2.9), hA / 2, -d / 2); wall.scale.set(1.2, hA, d + 0.4);
-      berm.position.set(side * (ROAD_HALF + 12.5), hA / 2 + 0.6, -d / 2); berm.scale.set(16, hA + 1.2, d + 22);
+      berm.position.set(side * (ROAD_HALF + 15), hA / 2 - 0.2, -d / 2); berm.scale.set(24, hA + 0.4, d + 40);
+    }
+    {
+      const L0 = b.lanes[0]; const x0 = -(ROAD_HALF + 3.5), x1 = ROAD2_X - ROAD_HALF - 3.5;
+      const ext = b.group.getObjectByName('ext') as THREE.Mesh;
+      ext.material = isSteel ? mat.steelGreen : isRail ? mat.railDark : mat.concrete;
+      ext.position.set((x0 + x1) / 2, L0.clear + thick / 2 + 0.1, -d / 2); ext.scale.set(x0 - x1, thick, d);
+      for (let i = 0; i < 2; i++) { const p = b.group.getObjectByName('extpier' + i) as THREE.Mesh; const px = i === 0 ? ROAD2_X + 1.9 : ROAD2_X - 1.9; p.visible = !isRail; p.position.set(px, (L0.clear + 0.3) / 2, -d / 2); p.scale.set(1, L0.clear + 0.3, 1); }
     }
     const ns = b.group.getObjectByName('railname') as THREE.Mesh;
     ns.visible = isRail;
@@ -893,6 +1024,70 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     m.visible = false; m.castShadow = true;
     scene.add(m);
     chunks.push({ m, v: new THREE.Vector3(), av: new THREE.Vector3() });
+  }
+
+  // ─── audio: synthesized diesel, jake brake, air, shave zing, crunch (muted until the speaker is tapped) ───
+  const audio = {
+    ctx: null as AudioContext | null, on: false, master: null as GainNode | null,
+    eng: null as OscillatorNode | null, eng2: null as OscillatorNode | null, engG: null as GainNode | null, turbo: null as OscillatorNode | null, turboG: null as GainNode | null,
+    noise: null as AudioBufferSourceNode | null, jakeG: null as GainNode | null, hissG: null as GainNode | null, brakeWas: false,
+  };
+  function audioInit() {
+    if (audio.ctx) return;
+    const C = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    audio.ctx = C;
+    const master = C.createGain(); master.gain.value = 0; master.connect(C.destination); audio.master = master;
+    const engG = C.createGain(); engG.gain.value = 0.18; engG.connect(master);
+    const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.connect(engG);
+    const eng = C.createOscillator(); eng.type = 'sawtooth'; eng.frequency.value = 32; eng.connect(lp); eng.start();
+    const eng2 = C.createOscillator(); eng2.type = 'square'; eng2.frequency.value = 64; const g2 = C.createGain(); g2.gain.value = 0.35; eng2.connect(g2); g2.connect(lp); eng2.start();
+    const turboG = C.createGain(); turboG.gain.value = 0; turboG.connect(master);
+    const turbo = C.createOscillator(); turbo.type = 'sine'; turbo.frequency.value = 900; turbo.connect(turboG); turbo.start();
+    // noise bed for jake brake / air
+    const buf = C.createBuffer(1, C.sampleRate * 2, C.sampleRate); const dd = buf.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
+    const noise = C.createBufferSource(); noise.buffer = buf; noise.loop = true; noise.start();
+    const jakeG = C.createGain(); jakeG.gain.value = 0; const jbp = C.createBiquadFilter(); jbp.type = 'bandpass'; jbp.frequency.value = 180; jbp.Q.value = 2; noise.connect(jbp); jbp.connect(jakeG); jakeG.connect(master);
+    const hissG = C.createGain(); hissG.gain.value = 0; const hhp = C.createBiquadFilter(); hhp.type = 'highpass'; hhp.frequency.value = 3000; noise.connect(hhp); hhp.connect(hissG); hissG.connect(master);
+    Object.assign(audio, { eng, eng2, engG, turbo, turboG, noise, jakeG, hissG });
+  }
+  function audioSet(on: boolean) {
+    audio.on = on;
+    el.snd.textContent = on ? 'Sound on' : 'Sound off';
+    if (on) { audioInit(); audio.ctx!.resume(); audio.master!.gain.setTargetAtTime(0.6, audio.ctx!.currentTime, 0.1); }
+    else if (audio.master) audio.master.gain.setTargetAtTime(0, audio.ctx!.currentTime, 0.05);
+  }
+  function audioTick() {
+    if (!audio.on || !audio.ctx) return;
+    const t = audio.ctx.currentTime;
+    const running = G.phase === 'run';
+    const rpm = running ? 0.35 + 0.65 * (G.speed / SPEED_CAP) : 0.25;
+    audio.eng!.frequency.setTargetAtTime(24 + rpm * 46, t, 0.15);
+    audio.eng2!.frequency.setTargetAtTime(48 + rpm * 92, t, 0.15);
+    audio.engG!.gain.setTargetAtTime(running ? 0.16 + rpm * 0.1 : 0.08, t, 0.2);
+    audio.turbo!.frequency.setTargetAtTime(600 + rpm * 1900 * (G.hammer ? 1.2 : 1), t, 0.3);
+    audio.turboG!.gain.setTargetAtTime(running ? 0.012 * rpm * (G.hammer ? 2 : 1) : 0, t, 0.3);
+    const jake = running && G.brake;
+    audio.jakeG!.gain.setTargetAtTime(jake ? 0.35 : 0, t, 0.05);
+    if (audio.brakeWas && !G.brake) { audio.hissG!.gain.setValueAtTime(0.25, t); audio.hissG!.gain.setTargetAtTime(0, t + 0.05, 0.25); }
+    audio.brakeWas = G.brake;
+  }
+  function sfx(kind: 'shave' | 'crash' | 'lane' | 'stamp') {
+    if (!audio.on || !audio.ctx) return;
+    const C = audio.ctx, t = C.currentTime;
+    const g = C.createGain(); g.connect(audio.master!);
+    if (kind === 'shave') {
+      const o = C.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(1400, t); o.frequency.exponentialRampToValueAtTime(4200, t + 0.25);
+      g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5); o.connect(g); o.start(t); o.stop(t + 0.5);
+    } else if (kind === 'crash') {
+      const n = C.createBufferSource(); n.buffer = audio.noise!.buffer; const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(3000, t); lp.frequency.exponentialRampToValueAtTime(120, t + 1.2);
+      g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4); n.connect(lp); lp.connect(g); n.start(t); n.stop(t + 1.5);
+      for (let i = 0; i < 4; i++) { const o = C.createOscillator(); o.type = 'square'; o.frequency.value = 80 + i * 37; const gg = C.createGain(); gg.connect(audio.master!); const t0 = t + 0.35 + i * 0.22; gg.gain.setValueAtTime(0, t0); gg.gain.linearRampToValueAtTime(0.15, t0 + 0.01); gg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.2); o.connect(gg); o.start(t0); o.stop(t0 + 0.25); }
+    } else if (kind === 'lane') {
+      const n = C.createBufferSource(); n.buffer = audio.noise!.buffer; const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(1600, t + 0.3); bp.Q.value = 1.5;
+      g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35); n.connect(bp); bp.connect(g); n.start(t); n.stop(t + 0.4);
+    } else {
+      const o = C.createOscillator(); o.type = 'square'; o.frequency.value = 90; g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12); o.connect(g); o.start(t); o.stop(t + 0.13);
+    }
   }
 
   // ─── state ───
@@ -973,6 +1168,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     resetBridges();
     setWaypoint(0);
     for (const c of chunks) c.m.visible = false;
+    for (const v of [...traffic, ...oncoming]) { v.active = false; v.g.visible = false; }
     loadG.visible = true;
     truck.rotation.set(0, 0, 0); truck.position.set(0, 0, 0);
     el.card.classList.remove('show'); el.banner.classList.remove('show');
@@ -983,11 +1179,12 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     G.phase = 'run';
     el.title.classList.add('hidden');
     el.hud.classList.remove('hidden');
-    el.hint.style.opacity = '1';
+    let seen = false; try { seen = localStorage.getItem('clr3d.seen') === '1'; localStorage.setItem('clr3d.seen', '1'); } catch { /* ignore */ }
+    el.hint.style.opacity = seen ? '0' : '1';
     setTimeout(() => (el.hint.style.opacity = '0'), 7000);
   }
-  function crash(kind: 'BRIDGE STRIKE' | 'PIER STRIKE', b: Bridge, point: THREE.Vector3) {
-    G.phase = 'crash'; G.crashKind = kind; G.crashBridge = b.name; G.crashT = 0; G.crashPt.copy(point); G.brake = false;
+  function crash(kind: 'BRIDGE STRIKE' | 'PIER STRIKE' | 'COLLISION', b: Bridge | null, point: THREE.Vector3, label = '') {
+    G.phase = 'crash'; G.crashKind = kind; G.crashBridge = b ? b.name : label; G.crashT = 0; G.crashPt.copy(point); G.brake = false;
     if (G.score > G.best) { G.best = G.score; try { localStorage.setItem('clr3d.best', String(G.best)); } catch { /* ignore */ } }
     if (reduceMotion) { showFail(); return; }
     loadG.visible = false;
@@ -997,13 +1194,14 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       c.v.set((rngFx() - 0.5) * 10, 2 + rngFx() * 8, 5 + rngFx() * 12);
       c.av.set(rngFx() * 6, rngFx() * 6, rngFx() * 6);
     }
-    G.shake = 1;
+    G.shake = 1; sfx('crash');
     el.flash.style.transition = 'none'; el.flash.style.opacity = '0.7';
     requestAnimationFrame(() => { el.flash.style.transition = 'opacity .6s'; el.flash.style.opacity = '0'; });
   }
   function showFail() {
     G.phase = 'fail';
     el.kind.textContent = (G.crashKind || 'BRIDGE STRIKE').toLowerCase();
+    el.kind.style.fontSize = G.crashKind === 'COLLISION' ? '34px' : '';
     el.bname.textContent = G.crashBridge;
     el.fkm.textContent = G.score.toFixed(2) + ' km'; el.fmult.textContent = '×' + G.topMult;
     el.fcl.textContent = String(G.cleared); el.fbest.textContent = G.best.toFixed(2) + ' km';
@@ -1064,6 +1262,25 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       else banner(wpName(), 'Late. Dispatch has noted it.', true, 2200);
       setWaypoint(G.wpIdx + 1);
     }
+    // traffic
+    spawnTraffic(); spawnOncoming();
+    const base0 = base;
+    for (const v of traffic) {
+      if (!v.active) continue;
+      v.w += v.v * base0 * dt;
+      if (v.w + v.len < G.dist - 40 || v.w > G.dist + 900) { v.active = false; v.g.visible = false; continue; }
+      // our rig spans [dist, dist + 20.9] in lane laneX
+      const overlapW = v.w < G.dist + 20.9 && v.w + v.len > G.dist;
+      if (overlapW && Math.abs(G.laneX - v.x) < LOAD_HALF_W + 1.05) {
+        crash('COLLISION', null, new THREE.Vector3(v.x, 1.5, G.dist - v.w - 1), v.kind === 'grain' ? 'REAR-ENDED A GRAIN TRUCK' : 'REAR-ENDED A HALF-TON');
+        return;
+      }
+    }
+    for (const v of oncoming) {
+      if (!v.active) continue;
+      v.w -= v.v * dt;
+      if (v.w < G.dist - 80) { v.active = false; v.g.visible = false; }
+    }
     // bridges
     fillBridges();
     const top = hEff();
@@ -1094,7 +1311,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
           G.shaveChain = Math.min(G.shaveChain + 1, SHAVE_CHAIN.length);
           G.shaveUntil = G.dist + SHAVE_LEN;
           const m = SHAVE_CHAIN[G.shaveChain - 1];
-          banner('Close shave', `${Math.max(0, Math.round(b.minMargin * 100))} cm · ×${m}`);
+          banner('Close shave', `${Math.max(0, Math.round(b.minMargin * 100))} cm · ×${m}`); sfx('shave');
           if (!reduceMotion) G.shake = Math.max(G.shake, 0.5);
           dispatchTick('shave');
         } else dispatchTick('noshave');
@@ -1166,6 +1383,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   // ─── camera ───
   let portrait = false;
   let camMode: 'chase' | 'dolly' = 'chase';
+  let camOverride: { p: THREE.Vector3; t: THREE.Vector3 } | null = null;
   const camTarget = new THREE.Vector3(0, 2.5, -20);
   const camPos = new THREE.Vector3(0, CAM_UP, CAM_BACK);
   const tmpV = new THREE.Vector3();
@@ -1179,12 +1397,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       camPos.lerp(tmpV.set(p.x + 4.5, p.y + 1.6, p.z + 10), Math.min(1, G.crashT / 1.1) * 0.06);
       camTarget.lerp(p, 0.15);
     } else if (camMode === 'dolly') {
-      camPos.lerp(tmpV.set(G.laneX - 9, 1.6, -4), Math.min(1, 4 * dt));
-      camTarget.set(G.laneX + 6, 3.4, -14);
+      camPos.lerp(tmpV.set(G.laneX - 11, 2.4, -6), Math.min(1, 4 * dt));
+      camTarget.set(G.laneX + 3, 2.6, -15);
     } else {
       camPos.lerp(tmpV.set(G.laneX * 0.5, CAM_UP, CAM_BACK), Math.min(1, 4 * dt));
-      camTarget.set(G.laneX * 0.3, 2.6, -28);
+      camTarget.set(G.laneX * 0.3, 2.6 + (hAt(G.dist + 30) - hAt(G.dist)) * 0.8, -28);
     }
+    if (camOverride) { camPos.copy(camOverride.p); camTarget.copy(camOverride.t); }
     camera.position.copy(camPos);
     if (G.shake > 0 && !reduceMotion) {
       const s = G.shake * 0.35;
@@ -1197,37 +1416,49 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   // ─── frame ───
   function placeWorld(dt: number) {
     const d = G.dist;
+    const h0 = hAt(d);
     asphalt.map.offset.y = (d / (ROAD_LEN / 30)) % 1; asphalt.rough.offset.y = asphalt.map.offset.y;
-    grass.map.offset.y = (d / (2600 / 60)) % 1;
+    grass.map.offset.y = (d / (1150 / 26)) % 1;
     for (const f of fields) { while (f.w < d - 260) f.w += f.span; f.m.position.set(f.x, f.m.position.y, d - f.w); }
+    deformStrips(d, h0);
+    // traffic
+    for (const v of traffic) if (v.active) {
+      v.g.position.set(v.x, hAt(v.w) - h0, d - v.w - v.len / 2);
+      v.g.rotation.x = Math.atan(slopeAt(v.w));
+      const spin = v.v * G.speed * dt / 0.45; for (const w of v.wheels) w.rotation.x -= spin;
+    }
+    for (const v of oncoming) if (v.active) { v.g.position.set(v.x, hAt(v.w) - h0, d - v.w); v.g.rotation.x = -Math.atan(slopeAt(v.w)); }
+    headMat.emissiveIntensity = 3 * lightsOn; tailMat.emissiveIntensity = 2 * lightsOn;
     for (const g of scatterGroups) {
       const { im, items } = g;
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         while (it.w < d - 60) it.w += it.span;
-        tmpP.set(it.x, g.y, d - it.w); tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), it.rot); tmpS.setScalar(it.s);
+        tmpP.set(it.x, g.y + hAt(it.w) - h0 - 0.15, d - it.w); tmpQ.setFromAxisAngle(tmpV.set(0, 1, 0), it.rot); tmpS.setScalar(it.s);
         im.setMatrixAt(i, tmpM.compose(tmpP, tmpQ, tmpS));
       }
       im.instanceMatrix.needsUpdate = true;
     }
     for (const c of clouds) c.s.position.set(c.x - (d * 0.02) % 400, c.y, c.z);
-    city.position.z = -1000 + 0; city.scale.setScalar(1 + Math.min(2.2, d / 2600));
-    beam.position.set(0, 210, d - G.wpW);
+    city.position.set(0, hAt(d + 1000) - h0 - 2, -1000); city.scale.setScalar(1 + Math.min(2.2, d / 2600));
+    beam.position.set(0, 210 + hAt(G.wpW) - h0, d - G.wpW);
     beam.visible = G.phase !== 'title';
     for (const b of bridges) {
       if (!b.active) continue;
-      b.group.position.z = d - b.w;
+      b.group.position.set(0, hAt(b.w + b.depth / 2) - h0, d - b.w);
       const passed = b.w < d - 1;
       if (passed !== b.faceHidden) { b.faceHidden = passed; for (const L of b.lanes) L.plate.visible = L.lamp.visible = L.board.visible = !passed; }
     }
     // truck pose
     const tx = LANE_X[G.lane];
     truck.position.x = G.laneX;
-    if (G.phase !== 'crash') { truck.rotation.z = (tx - G.laneX) * 0.03; truck.rotation.y = (tx - G.laneX) * -0.05; }
+    if (G.phase !== 'crash') { truck.rotation.z = (tx - G.laneX) * 0.03; truck.rotation.y = (tx - G.laneX) * -0.05; truck.rotation.x = Math.atan(slopeAt(d + 8)); }
     loadG.rotation.z = G.sway;
     loadG.position.y = -0.02 * Math.abs(Math.sin(G.time * 9)) * (G.speed / 30);
     const spin = G.speed * dt / 0.53;
     for (const w of wheels) w.rotation.x -= spin;
+    const spinBig = G.speed * dt / 0.8;
+    for (const w of modelWheels) w.rotation.x += spinBig;
     // dust from the trailer tandems
     if (G.phase === 'run') {
       let spawned = 0;
@@ -1245,7 +1476,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     if (nb && nb.w < d + LOOK_AHEAD) {
       updateVerdicts(nb, hEff(), hSteady());
       marker.visible = G.phase === 'run';
-      marker.position.set(G.laneX, hEff(), d - nb.w + 0.6);
+      marker.position.set(G.laneX, hEff() + hAt(nb.w + nb.depth / 2) - h0, d - nb.w + 0.6);
       marker.rotation.z = G.sway;
       const fits = nb.lanes[G.lane].clear >= hEff();
       (marker.material as THREE.MeshBasicMaterial).color.set(fits ? '#5fd68a' : '#e0463a');
@@ -1267,14 +1498,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     el.sp.textContent = String(Math.round(G.speed * 3.6));
     el.mode.textContent = G.brake ? 'Braking' : G.hammer ? 'Hammer down' : 'Full ahead';
     el.mode.className = 'mode' + (G.brake ? ' brake' : G.hammer ? ' hammer' : '');
-    el.h.textContent = hEff().toFixed(2) + ' m' + (lift() > 0.02 ? ' · swaying' : '');
-    el.cl.textContent = String(G.cleared);
+    el.h.textContent = hEff().toFixed(2) + ' m' + (lift() > 0.02 ? ' · swaying' : ' · steady');
     el.mult.innerHTML = G.mult > 1 ? `<span>Multiplier</span><span>×${G.mult}</span>` : '';
     el.wpn.textContent = `${wpName()} · ${Math.max(0, (G.wpW - G.dist) / 1000).toFixed(2)} km`;
     el.wpt.textContent = fmtClock(G.wpClock);
     el.wpt.classList.toggle('late', G.wpClock < 0);
     const dsp = DISPATCH[G.dispIdx % DISPATCH.length];
-    el.dt.textContent = dsp.text; el.dp.textContent = `${G.dispProg} / ${dsp.goal} · +0.25 km`;
+    el.disp.textContent = `Dispatch · ${dsp.text} · ${G.dispProg}/${dsp.goal}`;
     el.view.textContent = camMode === 'chase' ? 'Chase' : 'Dolly';
   }
   let last = performance.now(), raf = 0, alive = true, todAcc = 0;
@@ -1289,6 +1519,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     placeWorld(dtReal);
     updateCamera(dtReal);
     if (G.phase !== 'title') updateHud();
+    audioTick();
     renderer.render(scene, camera);
   }
   function resize() {
@@ -1304,12 +1535,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   // ─── input ───
   function action(a: string) {
     switch (a) {
-      case 'left': if (G.phase === 'run') G.lane = clamp(G.lane - 1, 0, 2); break;
-      case 'right': if (G.phase === 'run') G.lane = clamp(G.lane + 1, 0, 2); break;
+      case 'left': if (G.phase === 'run' && G.lane > 0) { G.lane--; sfx('lane'); } break;
+      case 'right': if (G.phase === 'run' && G.lane < 2) { G.lane++; sfx('lane'); } break;
       case 'brake': case 'hold': G.brake = G.phase === 'run'; break;
       case 'release': G.brake = false; break;
       case 'hammer': case 'throttle': if (G.phase === 'run') { G.hammer = !G.hammer; banner(G.hammer ? 'Hammer down' : 'Easing off', G.hammer ? '×2 score · less time to read' : '', G.hammer, 900); } break;
       case 'camera': camMode = camMode === 'chase' ? 'dolly' : 'chase'; break;
+      case 'sound': audioSet(!audio.on); break;
       case 'start': if (G.phase === 'title' || G.phase === 'fail') beginRun(); break;
       case 'restart': if (G.phase === 'fail' || G.phase === 'run') beginRun(); break;
     }
@@ -1322,6 +1554,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
       case 'Space': case 'ArrowDown': if (G.phase === 'run') action('brake'); else action('start'); e.preventDefault(); break;
       case 'KeyS': case 'ArrowUp': action('hammer'); break;
       case 'KeyC': action('camera'); break;
+      case 'KeyM': action('sound'); break;
       case 'KeyR': action('restart'); break;
       case 'Enter': action('start'); break;
     }
@@ -1347,7 +1580,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
   cvs.addEventListener('pointerdown', onDown); cvs.addEventListener('pointermove', onMove);
   cvs.addEventListener('pointerup', onUp); cvs.addEventListener('pointercancel', onUp);
   const btn = (b: HTMLElement, a: string) => b.addEventListener('pointerdown', (e) => { e.stopPropagation(); action(a); });
-  btn(el.left, 'left'); btn(el.right, 'right'); btn(el.view, 'camera');
+  btn(el.left, 'left'); btn(el.right, 'right'); btn(el.view, 'camera'); btn(el.snd, 'sound');
   el.title.addEventListener('pointerup', () => action('start'));
   el.restart.addEventListener('pointerup', (e) => { e.stopPropagation(); action('restart'); });
   el.card.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -1361,14 +1594,17 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     dispatch: { text: DISPATCH[G.dispIdx % DISPATCH.length].text, progress: G.dispProg, goal: DISPATCH[G.dispIdx % DISPATCH.length].goal },
     bridges: bridges.filter((b) => b.active && !b.cleared).sort((a, b) => a.w - b.w)
       .map((b) => ({ w: b.w, depth: b.depth, kind: b.kind, name: b.name, clears: b.lanes.map((L) => L.clear), verdicts: b.lanes.map((L) => L.verdict) })),
+    traffic: traffic.filter((v) => v.active).map((v) => ({ w: v.w, len: v.len, lane: v.lane, v: v.v })),
   });
   window.__game = snapshot;
   window.__gameWarp = (m: number) => { G.dist += m; G.tod = clamp(G.dist / (NIGHT_KM * 1000), 0, 1); resetBridges(); setWaypoint(G.wpIdx); applyTimeOfDay(G.tod); };
   window.__gameInput = action;
+  window.__gameCam = (pos, target) => { camOverride = pos ? { p: new THREE.Vector3(...pos), t: new THREE.Vector3(...(target || [0, 2, -12])) } : null; };
   // deterministic stepping for headless bots (rendering is not needed to advance the sim)
   window.__gameStep = (seconds: number) => { const n = Math.max(1, Math.round(seconds * 60)); for (let i = 0; i < n && G.phase === 'run'; i++) simulate(1 / 60); };
 
   // ─── go ───
+  loadModel(opts.modelUrl || '/models/peterbilt.glb');
   el.best.textContent = G.best > 0 ? `Best haul ${G.best.toFixed(2)} km` : '';
   resetRun();
   placeWorld(0);
@@ -1379,8 +1615,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number } = {}): () =
     cancelAnimationFrame(raf);
     ro.disconnect();
     window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp);
-    delete window.__game; delete window.__gameWarp; delete window.__gameInput; delete window.__gameStep;
-    pmrem.dispose(); envTex?.dispose(); renderer.dispose();
+    delete window.__game; delete window.__gameWarp; delete window.__gameInput; delete window.__gameStep; delete window.__gameCam;
+    pmrem.dispose(); envTex?.dispose(); renderer.dispose(); audio.ctx?.close();
     root.innerHTML = ''; root.classList.remove('c3-root');
   };
 }

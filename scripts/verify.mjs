@@ -37,6 +37,7 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
     const hRest = s.loadH, hLow = s.loadH;
     // choose lane: prefer fit at resting height (tightest fit for shave), else duckable
     let best = -1, bestScore = -1e9;
+    const blocked = (i) => s.traffic.some((t) => t.lane === i && t.w + t.len > s.dist && t.w < s.dist + 140);
     for (let i = 0; i < 3; i++) {
       const c = nb.clears[i];
       let sc;
@@ -44,6 +45,7 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
       else if (c >= hRest + 0.01) sc = 50 + (c - hLow); // graze: brake to steady
       else sc = -100;
       sc -= Math.abs(i - s.lane) * 0.5; // small bias to stay put
+      if (blocked(i)) sc -= 80; // slow vehicle ahead in that lane
       if (sc > bestScore) { bestScore = sc; best = i; }
     }
     if (best !== s.lane && gap > 25 + s.speed * 0.4) {
@@ -60,6 +62,14 @@ while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
     if (!approachShot && gap < 60 && gap > 45 && s.cleared >= 2) {
       await page.screenshot({ path: `${out}/02-approach.png` });
       approachShot = true;
+    }
+  }
+  if (!nb || nb.w - s.dist > 200) {
+    // open road: dodge traffic in our lane
+    const ahead = s.traffic.find((t) => t.lane === s.lane && t.w + t.len > s.dist && t.w < s.dist + 90);
+    if (ahead) {
+      const free = [0, 1, 2].filter((i) => i !== s.lane && !s.traffic.some((t) => t.lane === i && t.w + t.len > s.dist - 10 && t.w < s.dist + 120));
+      if (free.length) { const to = free.sort((a, b) => Math.abs(a - s.lane) - Math.abs(b - s.lane))[0]; await input(to < s.lane ? 'left' : 'right'); laneSwitches++; }
     }
   }
   await page.evaluate(() => window.__gameStep(0.1));
