@@ -19,8 +19,8 @@ const html = `<!doctype html>
 <meta name="theme-color" content="#0b6b3a">
 <title>CLEARANCE 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap" rel="stylesheet">
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#6ea7dd;overscroll-behavior:none}#game{position:fixed;inset:0}</style>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#0b1020;overscroll-behavior:none}#game{position:fixed;inset:0}</style>
 </head><body><div id="game"></div>
 <script>${js}</script>
 <script>Clearance.startGame(document.getElementById('game'));</script>

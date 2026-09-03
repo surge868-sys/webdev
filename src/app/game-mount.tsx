@@ -16,5 +16,5 @@ export default function GameMount() {
       cleanup?.();
     };
   }, []);
-  return <div ref={ref} className="fixed inset-0 bg-[#6ea7dd]" aria-label="CLEARANCE 3D game" />;
+  return <div ref={ref} className="fixed inset-0 bg-[#0b1020]" aria-label="CLEARANCE 3D game" />;
 }

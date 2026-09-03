@@ -1,5 +1,9 @@
 # CLEARANCE 3D — technical plan
 
+Rebuild #2 (after M1 review): high-fidelity look (PBR + procedural maps, sky shader, env reflections,
+soft shadows, time-of-day), hold-to-brake replaces hold-to-lower, Saskatoon / Circle Drive on the signs,
+everything else fictional.
+
 ## File structure
 
 ```
@@ -47,11 +51,16 @@ after warm-up. One shadow-casting directional light; MeshLambert flat shaded.
 ## Collision spans vs drawn truck
 
 Along the truck's forward axis (−Z), measured in metres ahead of the origin:
-- origin = rear bumper of the trailer (nearest camera). Drawn trailer bed spans 0 … 12.0,
-  load box occupies **[1.7, 10.3]** — the collision span. Cab spans 12.2 … 15.5.
+- origin = rear of the trailer (nearest camera). Drawn step-deck spans 0 … 12.5; the steel truss
+  occupies **[1.0, 13.5]** — the collision span (it overhangs the neck, on purpose). Tractor sits at 11.2 … 18.
+- Round piers r = 0.36 at x = ±1.9; truss half-width 1.45 → 9 cm of pier slack at lane centre. A lane
+  change must be complete before the deck.
 - Bridge deck occupies world `[b.z, b.z + b.depth]`. Load is under the deck when
   `dist + 1.7 < b.z + depth` and `dist + 10.3 > b.z`.
-- Effective top `hEff = loadH − lowered + gustLift + potholeBounce`.
+- Effective top `hEff = loadH + swayLift + gustLift + potholeBounce`, where `swayLift = 1.6·|sin θ|` and θ is
+  the load's roll from a driven oscillator (k=4, c=0.55; braking c=4.5; speed² and hammer-down excite it;
+  lane changes kick it). **There are no hydraulics.** Verbs: swipe lane · hold to BRAKE (0.45× speed, steadies
+  the load, waypoint clock punishes it) · swipe ▼ HAMMER DOWN (1.35× speed, 2× score, 2.2× sway).
 - Under deck: `hEff > lane.clear` → BRIDGE STRIKE. `|laneX − laneCentre| > 0` with the load's
   half-width (1.3 m) crossing a pier line (x = ±1.9) → PIER STRIKE. Piers are 0.5 m wide, so
   the strike condition is `|laneX| + 1.3 > 1.9 − 0.25` i.e. `|laneX| > 0.35` while under a
@@ -63,8 +72,8 @@ Along the truck's forward axis (−Z), measured in metres ahead of the origin:
 
 ## Tuning constants (from brief, do not rediscover)
 
-lanes x = −3.8/0/3.8, road half-width 5.7, lane lerp 5/s · duck 0.40 m in 0.2 s, spring k=8 c=5 ·
-air 4.2 s drain, 5.0 s refill, lock until 20% · throttle 1.35× speed 2× score · speed 16 + 0.012/m cap 36 ·
+lanes x = −3.8/0/3.8, road half-width 5.7, lane lerp 5/s · brake 0.45× · hammer 1.35× speed 2× score ·
+clearance tiers vs steady height h: graze h+0.03…0.08 (fits only steady, 45% of solutions), easy h+0.15…0.40; decoys: second graze lane 45% else h−0.85…−0.55 · speed 16 + 0.012/m cap 36 ·
 spacing 55 first, then 108 + rand·55, −0.015/m, floor 78; depth 9–14 · shave <10 cm, chain ×3→×5→×7→×9→×10 for 200 m ·
 camera 5.6 up / 12.6 back; FOV 62 portrait / 52 landscape · loads 3.9…5.8 every 1.6 km (first at 400 m).
 

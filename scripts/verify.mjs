@@ -27,21 +27,21 @@ await page.waitForTimeout(300);
 
 // Bot: read the next bridge's posted clearances, pick the best lane, hold when close.
 const LANE_X = [-3.8, 0, 3.8];
-let approachShot = false, crashShot = false, holdActive = false, laneSwitches = 0, holds = 0;
+let approachShot = false, holdActive = false, laneSwitches = 0, holds = 0;
 const t0 = Date.now();
 let s = await snap();
-while (s.phase === 'run' && Date.now() - t0 < 120000) {
+while (s.phase === 'run' && Date.now() - t0 < 120000 && s.dist < 6000) {
   const nb = s.bridges[0];
   if (nb) {
     const gap = nb.w - s.dist; // metres from truck origin to the near face
-    const hRest = s.loadH, hLow = s.loadH - 0.4;
+    const hRest = s.loadH, hLow = s.loadH;
     // choose lane: prefer fit at resting height (tightest fit for shave), else duckable
     let best = -1, bestScore = -1e9;
     for (let i = 0; i < 3; i++) {
       const c = nb.clears[i];
       let sc;
-      if (c >= hRest) sc = 100 - (c - hRest); // fits: prefer tightest
-      else if (c >= hLow + 0.03) sc = 50 + (c - hLow); // duckable: prefer most headroom
+      if (c >= hRest + 0.12) sc = 100 - (c - hRest); // fits at cruise: prefer tightest
+      else if (c >= hRest + 0.01) sc = 50 + (c - hLow); // graze: brake to steady
       else sc = -100;
       sc -= Math.abs(i - s.lane) * 0.5; // small bias to stay put
       if (sc > bestScore) { bestScore = sc; best = i; }
@@ -51,27 +51,38 @@ while (s.phase === 'run' && Date.now() - t0 < 120000) {
       laneSwitches++;
     }
     const laneNow = best === s.lane ? best : s.lane;
-    const needDuck = nb.clears[laneNow] < hRest + 0.001;
-    const under = gap < 16 + s.speed * 0.45 && gap + nb.depth + 11 > 0;
-    const want = needDuck && under;
-    if (want && !holdActive) { await input('hold'); holdActive = true; holds++; }
+    // graze lane: brake early enough for the sway to die before the deck, hold until the truss clears
+    const needSteady = nb.clears[laneNow] < hRest + 0.12;
+    const under = gap < 30 + s.speed * 0.8 && gap + nb.depth + 14 > 0;
+    const want = needSteady && under;
+    if (want && !holdActive) { await input('brake'); holdActive = true; holds++; }
     if (!want && holdActive) { await input('release'); holdActive = false; }
     if (!approachShot && gap < 60 && gap > 45 && s.cleared >= 2) {
       await page.screenshot({ path: `${out}/02-approach.png` });
       approachShot = true;
     }
   }
-  await page.waitForTimeout(40);
+  await page.evaluate(() => window.__gameStep(0.1));
   s = await snap();
 }
 const botResult = { phase: s.phase, dist: Math.round(s.dist), score: +s.score.toFixed(2), cleared: s.cleared, crashKind: s.crashKind, laneSwitches, holds, secs: Math.round((Date.now() - t0) / 1000) };
 console.log('BOT', JSON.stringify(botResult));
 if (!approachShot) await page.screenshot({ path: `${out}/02-approach.png` });
 
-// Force a crash for the crash screenshot: restart, then never duck.
+// Time-of-day: warp to dusk and night for screenshots (bot keeps driving a little).
+for (const [name, m] of [['06-dusk', 1500], ['07-night', 3300]]) {
+  await page.waitForFunction(() => window.__game().phase !== 'crash');
+  await input('restart');
+  await page.waitForTimeout(150);
+  await page.evaluate((m) => window.__gameWarp(m), m);
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${out}/${name}.png` });
+}
+
+// Force a crash for the crash screenshot: restart, then steer into the lowest lane.
+await page.waitForFunction(() => window.__game().phase !== 'crash');
 await input('restart');
 await page.waitForTimeout(200);
-await page.evaluate(() => window.__gameWarp(0));
 s = await snap();
 const tc = Date.now();
 while (s.phase === 'run' && Date.now() - tc < 60000) {
@@ -82,7 +93,7 @@ while (s.phase === 'run' && Date.now() - tc < 60000) {
     for (let i = 1; i < 3; i++) if (nb.clears[i] < nb.clears[worst]) worst = i;
     if (worst !== s.lane && nb.w - s.dist > 30) await input(worst < s.lane ? 'left' : 'right');
   }
-  await page.waitForTimeout(40);
+  await page.evaluate(() => window.__gameStep(0.1));
   s = await snap();
 }
 await page.waitForTimeout(500);
@@ -93,6 +104,7 @@ console.log('CRASH', JSON.stringify({ phase: s.phase, crashKind: s.crashKind, di
 
 // landscape title for good measure
 await page.setViewportSize({ width: 844, height: 390 });
+await page.waitForFunction(() => window.__game().phase !== 'crash');
 await input('restart');
 await page.waitForTimeout(600);
 await page.screenshot({ path: `${out}/05-landscape.png` });

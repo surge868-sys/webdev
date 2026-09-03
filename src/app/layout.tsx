@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import { Oswald } from 'next/font/google';
+import { Oswald, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
 
-const oswald = Oswald({ variable: '--font-hud', subsets: ['latin'], weight: ['400', '700'] });
+const oswald = Oswald({ variable: '--font-plate', subsets: ['latin'], weight: ['700'] });
+const cormorant = Cormorant_Garamond({ variable: '--font-hud', subsets: ['latin'], weight: ['400', '600'] });
 
 export const metadata: Metadata = {
   title: 'CLEARANCE 3D — haul the load, miss the overpass',
@@ -20,8 +21,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${oswald.variable} h-full antialiased`}>
-      <body className="h-full overflow-hidden bg-[#6ea7dd]">{children}</body>
+    <html lang="en" className={`${oswald.variable} ${cormorant.variable} h-full antialiased`}>
+      <body className="h-full overflow-hidden bg-[#0b1020]">{children}</body>
     </html>
   );
 }
