@@ -65,14 +65,13 @@ Along the truck's forward axis (−Z), measured in metres ahead of the origin:
 
 ## Loads (the 2026 Saskatoon strikes, in order of stupidity)
 
-| # | load | top | span (m ahead of trailer rear) | source |
+| # | load | top | span (m ahead of trailer rear) | strike |
 |---|---|---|---|---|
-| 0 | steel truss (tutorial) | 4.30 | 1.0 – 13.5 | the reference photo |
-| 1 | grain bin | 4.60 | 4.5 – 9.5 | 51st St / Idylwyld, Jul 24 |
-| 2 | track hoe, boom half-down | 4.75 | 1.5 – 10.5 | Circle Dr / Hwy 11, Mar 5 (posted 4.7 m) |
-| 3 | air seeder, wings up | 4.95 | 1.0 – 13.0 | Borden Bridge rail bridge, Sep 2 (ag equipment) |
-| 4 | second excavator, boom "mostly down" | 5.10 | 1.5 – 10.5 | 108th St, Mar 11 |
-| 5 | combine header | 5.30 | 1.0 – 12.5 | McKercher / CPKC, Mar 22 (heavy equipment) |
+| 0 | Caterpillar track hoe (tutorial) | 4.75 | 1.5 – 10.5 | Mar 5 · Circle Dr / Hwy 11, posted 4.7 m, $283k, $11,200 fine |
+| 1 | excavator, over-height | 4.90 | 1.5 – 10.5 | Mar 11 · 108th Street, ~$350k |
+| 2 | heavy equipment | 5.05 | 1.5 – 10.5 | Mar 22 · CPKC rail overpass + McKercher Drive |
+| 3 | grain bin | 5.20 | 4.5 – 9.5 | Jul 24 · 51st Street / Idylwyld |
+| 4 | farm equipment | 5.35 | 1.0 – 13.0 | Sep 2 · CPKC rail bridge near Borden Bridge |
 
 Upgrades at 400 m then every 1600 m, deferred while any uncleared bridge is within 60 m; bridges beyond
 230 m regenerate for the new height, bridges in view get one lane bumped to survivable if none was.

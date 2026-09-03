@@ -387,7 +387,7 @@ const HUD_HTML = `
 <div class="c3-title" id="c3-title">
   <div class="eb">Saskatoon · Circle Drive approach</div>
   <div class="lg">Clearance</div>
-  <div class="sub">Two excavators, a grain bin and no permit. Based on a true year.</div>
+  <div class="sub">Three excavators, a grain bin, some farm equipment. Based on a true year.</div>
   <div class="tap">Tap to haul</div>
   <div class="keys">Swipe ◀ ▶ lane · hold to lower the load · swipe ▼ hammer down<br>Keys ← → · Space · S · C view · M sound</div>
   <div class="gc" id="c3-best"></div>
@@ -808,38 +808,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   truck.add(loadG);
   // Loads are the loads that actually hit Saskatoon overpasses in 2026: excavators, a grain bin, farm equipment.
   interface LoadDef { name: string; h: number; z0: number; z1: number; build: () => THREE.Group }
-  const memberGeo = new THREE.BoxGeometry(1, 1, 1);
-  function trussGroup(z0: number, z1: number, top: number, halfW: number): THREE.Group {
-    const g = new THREE.Group();
-    const ms: THREE.Matrix4[] = [];
-    const member = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, t = 0.16) => {
-      const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz);
-      const len = a.distanceTo(b), mid = a.clone().add(b).multiplyScalar(0.5), dir = b.clone().sub(a).normalize();
-      tmpQ.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-      ms.push(new THREE.Matrix4().compose(mid, tmpQ.clone(), new THREE.Vector3(t, len, t)));
-    };
-    const y0 = BED_H + 0.12, y1 = top - 0.12, zA = -z0, zB = -z1, hw = halfW - 0.15, n = 8;
-    for (const x of [-hw, hw]) {
-      member(x, y0, zA, x, y0, zB, 0.24); member(x, y1, zA, x, y1, zB, 0.24);
-      for (let i = 0; i <= n; i++) {
-        const z = zA + (zB - zA) * (i / n); member(x, y0, z, x, y1, z, 0.14);
-        if (i < n) { const z2 = zA + (zB - zA) * ((i + 1) / n); if (i % 2 === 0) member(x, y0, z, x, y1, z2, 0.12); else member(x, y1, z, x, y0, z2, 0.12); }
-      }
-    }
-    for (let i = 0; i <= n; i++) { const z = zA + (zB - zA) * (i / n); member(-hw, y1, z, hw, y1, z, 0.12); member(-hw, y0, z, hw, y0, z, 0.14); }
-    for (let i = 0; i < n; i++) { const z = zA + (zB - zA) * (i / n), z2 = zA + (zB - zA) * ((i + 1) / n); member(-hw, y1, z, hw, y1, z2, 0.09); }
-    const im = new THREE.InstancedMesh(memberGeo, mat.galv, ms.length);
-    ms.forEach((m, i) => im.setMatrixAt(i, m)); im.castShadow = true; im.receiveShadow = true; g.add(im);
-    for (const z of [zA - 1.2, zB + 1.2]) for (const x of [-halfW + 0.1, halfW - 0.1]) {
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.35), mat.flag); f.position.set(x, top + 0.2, z); g.add(f);
-      cyl(0.03, 0.9, mat.galv, x, top - 0.2, z, 'y', g, 6);
-    }
-    return g;
-  }
   const catYellow = new THREE.MeshStandardMaterial({ color: '#e8a21a', roughness: 0.55, metalness: 0.2 });
   const catDark = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.9 });
-  const agRed = new THREE.MeshStandardMaterial({ color: '#b8261f', roughness: 0.5, metalness: 0.2 });
-  const agGreen = new THREE.MeshStandardMaterial({ color: '#2f7a2a', roughness: 0.5, metalness: 0.2 });
+    const agGreen = new THREE.MeshStandardMaterial({ color: '#2f7a2a', roughness: 0.5, metalness: 0.2 });
   const corrug = new THREE.MeshStandardMaterial({ color: '#c9ccd0', roughness: 0.35, metalness: 0.85, envMapIntensity: 1.2 });
   function excavatorGroup(top: number, z0: number, z1: number, boomDown: number): THREE.Group {
     const g = new THREE.Group(); const y0 = BED_H; const zc = -(z0 + z1) / 2 + 1.0;
@@ -883,21 +854,13 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     box(0.5, 0.4, 0.5, mat.galv, 0, top - 0.2, zc + 1.9, g, false); // fill lid = true top
     return g;
   }
-  function combineHeaderGroup(top: number, z0: number, z1: number): THREE.Group {
-    const g = new THREE.Group(); const zc = -(z0 + z1) / 2;
-    box(2.8, 1.4, 10.0, agRed, 0, BED_H + 0.7, zc, g); // header body on its side
-    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 9.6, 12), mat.galv); reel.rotation.x = Math.PI / 2; reel.position.set(0.6, top - 0.6, zc); g.add(reel);
-    for (let i = 0; i < 6; i++) { const bat = box(0.1, top - BED_H - 1.5, 9.6, mat.galv, 0.6 + Math.cos(i) * 0.5, (top - 0.6 + BED_H + 1.4) / 2, zc, g, false); bat.rotation.z = i * 0.5; }
-    box(2.6, 0.5, 2.0, agRed, 0, top - 0.25, zc + 3.8, g); // feeder house
-    return g;
-  }
+  // Chronological: every load here actually hit a Saskatoon-area overpass in 2026. Nothing invented.
   const LOADS: LoadDef[] = [
-    { name: 'Steel truss', h: 4.3, z0: 1.0, z1: 13.5, build: () => trussGroup(1.0, 13.5, 4.3, LOAD_HALF_W) },
-    { name: 'Grain bin', h: 4.6, z0: 4.5, z1: 9.5, build: () => grainBinGroup(4.6, 4.5, 9.5) },
-    { name: 'Track hoe, boom half-down', h: 4.75, z0: 1.5, z1: 10.5, build: () => excavatorGroup(4.75, 1.5, 10.5, 0.42) },
-    { name: 'Air seeder, wings up', h: 4.95, z0: 1.0, z1: 13.0, build: () => airSeederGroup(4.95, 1.0, 13.0) },
-    { name: 'Second excavator, boom "mostly down"', h: 5.1, z0: 1.5, z1: 10.5, build: () => excavatorGroup(5.1, 1.5, 10.5, 0.55) },
-    { name: 'Combine header', h: 5.3, z0: 1.0, z1: 12.5, build: () => combineHeaderGroup(5.3, 1.0, 12.5) },
+    { name: 'Caterpillar track hoe', h: 4.75, z0: 1.5, z1: 10.5, build: () => excavatorGroup(4.75, 1.5, 10.5, 0.42) }, // Mar 5 · Circle Dr / Hwy 11 (posted 4.7 m)
+    { name: 'Excavator, over-height', h: 4.9, z0: 1.5, z1: 10.5, build: () => excavatorGroup(4.9, 1.5, 10.5, 0.55) }, // Mar 11 · 108th Street
+    { name: 'Heavy equipment', h: 5.05, z0: 1.5, z1: 10.5, build: () => excavatorGroup(5.05, 1.5, 10.5, 0.7) }, // Mar 22 · CPKC + McKercher
+    { name: 'Grain bin', h: 5.2, z0: 4.5, z1: 9.5, build: () => grainBinGroup(5.2, 4.5, 9.5) }, // Jul 24 · 51st Street
+    { name: 'Farm equipment', h: 5.35, z0: 1.0, z1: 13.0, build: () => airSeederGroup(5.35, 1.0, 13.0) }, // Sep 2 · Borden Bridge rail bridge
   ];
   let loadMesh: THREE.Group | null = null;
   const loadMarkers: THREE.Mesh[] = [];
@@ -1172,7 +1135,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── state ───
   const G = {
     phase: 'title' as Phase, dist: 0, speed: 0, hold: false, lowered: 0, lowerVel: 0, air: 1, airLocked: false, hammer: false, mult: 1, score: 0,
-    lane: 1, laneX: 0, loadH: 4.3, loadIdx: 0, z0: LOAD_Z0, z1: LOAD_Z1, nextUpgrade: UPGRADE_FIRST, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
+    lane: 1, laneX: 0, loadH: 4.75, loadIdx: 0, z0: LOAD_Z0, z1: LOAD_Z1, nextUpgrade: UPGRADE_FIRST, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
     cleared: 0, shaveChain: 0, shaveUntil: -1, shaveRun: 0, topMult: 1, bridgeCount: 0, nextW: FIRST_BRIDGE,
     wpIdx: 0, wpW: 0, wpDeadline: 0, wpClock: 0, dispIdx: 0, dispProg: 0, bonusKm: 0,
     crashKind: null as string | null, crashBridge: '', crashT: 0, crashPt: new THREE.Vector3(), shake: 0, time: 0, best: 0, tod: 0,
