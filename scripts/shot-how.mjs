@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
+const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+await p.goto('file://' + process.cwd() + '/dist/clearance.html');
+await p.waitForFunction(() => typeof window.__game === 'function');
+await p.waitForTimeout(1200);
+await p.evaluate(() => document.getElementById('c3-how').dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+await p.waitForTimeout(400);
+await p.screenshot({ path: 'verify/16-howto.png' });
+await b.close();

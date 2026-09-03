@@ -364,6 +364,22 @@ const CSS = `
 .c3-live .tk{flex:1;overflow:hidden;white-space:nowrap;font-size:14px;letter-spacing:.1em;font-weight:700;text-transform:uppercase}
 .c3-live .tk span{display:inline-block;padding-left:100%;animation:c3tick 38s linear infinite}
 @keyframes c3tick{to{transform:translateX(-100%)}}
+.c3-howto{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;background:linear-gradient(rgba(4,8,18,.35),rgba(4,8,18,.75));pointer-events:auto;overflow-y:auto}
+.c3-howto.show{display:flex}
+.c3-howto .hd{width:min(92vw,420px);border-radius:10px;border:3px solid #fff;background:linear-gradient(#22954f,#176e3a);box-shadow:inset 0 0 0 2px #176e3a,inset 0 0 0 3px #fff,0 4px 0 rgba(0,0,0,.45);padding:10px 14px;font-family:${BIG_FONT};font-size:30px;letter-spacing:.06em;text-transform:uppercase;line-height:1;text-align:center}
+.c3-howto .hd small{display:block;font-family:${HUD_FONT};font-size:10px;letter-spacing:.24em;font-weight:700;margin-top:4px;opacity:.9}
+.c3-ctl{width:min(92vw,420px);display:flex;align-items:center;gap:12px;border-radius:10px;border:3px solid #111;padding:8px 12px;box-shadow:0 4px 0 rgba(0,0,0,.45);color:#111;text-align:left}
+.c3-ctl.y{background:linear-gradient(#f7c235,#e8a91a)}.c3-ctl.w{background:linear-gradient(#fff,#e9e9e9)}.c3-ctl.o{background:linear-gradient(#ff8a2a,#e8641a)}
+.c3-ctl .ic{flex:none;width:58px;height:58px;border-radius:9px;background:#141414;color:#f2b32a;display:flex;align-items:center;justify-content:center;font-family:${BIG_FONT};font-size:30px;line-height:1}
+.c3-ctl .ic.hold{font-size:14px;letter-spacing:.1em;text-align:center}
+.c3-ctl .tx b{display:block;font-family:${BIG_FONT};font-size:22px;letter-spacing:.04em;text-transform:uppercase;line-height:1}
+.c3-ctl .tx span{display:block;font-size:12px;line-height:1.3;font-weight:700;letter-spacing:.02em;margin-top:3px}
+.c3-legend{width:min(92vw,420px);display:flex;gap:8px}
+.c3-legend div{flex:1;border-radius:8px;border:3px solid #111;padding:6px 4px;text-align:center;font-weight:700;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#111;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.c3-legend div b{display:block;font-family:${BIG_FONT};font-size:20px;line-height:1;letter-spacing:.02em}
+.c3-legend .g{background:linear-gradient(#2fbf62,#1f8a48);color:#fff;border-color:#fff}.c3-legend .y{background:linear-gradient(#f7c235,#e8a91a)}.c3-legend .o{background:linear-gradient(#ff7a2a,#e04b12)}
+.c3-keys{width:min(92vw,420px);text-align:center;font-size:11px;letter-spacing:.16em;font-weight:700;text-shadow:0 1px 3px #000;text-transform:uppercase}
+.c3-howto .c3-acts .back{background:linear-gradient(#fff,#e9e9e9)}
 .c3-card{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 16px max(16px,env(safe-area-inset-bottom));background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.55));pointer-events:auto;gap:12px}
 .c3-card.show{display:flex}
 .c3-over{font-family:${BIG_FONT};font-size:min(21vw,96px);line-height:.88;text-align:center;-webkit-text-stroke:3px #111;text-shadow:0 6px 0 #111,0 10px 18px rgba(0,0,0,.5);letter-spacing:.02em;margin-bottom:auto;margin-top:8vh}
@@ -429,11 +445,20 @@ const HUD_HTML = `
   </svg></div>
   <div class="c3-menu">
     <div class="m" id="c3-start">Haul<small>Endless run · three excavators, a grain bin, farm equipment</small></div>
-    <div class="m" id="c3-how">How to drive<small>Swipe lanes · hold to lower · swipe down to hammer</small></div>
+    <div class="m" id="c3-how">How to drive<small>Controls, plates, air</small></div>
     <div class="m dim" id="c3-daily">Daily route<small>Coming soon</small></div>
   </div>
   <div class="gc" id="c3-best"></div>
   <div class="c3-live"><div class="tag">LIVE</div><div class="tk"><span id="c3-ticker"></span></div></div>
+</div>
+<div class="c3-howto" id="c3-howto">
+  <div class="hd">How to drive<small>One thumb. Read the yellow plates.</small></div>
+  <div class="c3-ctl w"><div class="ic">◀ ▶</div><div class="tx"><b>Swipe left or right</b><span>Change lane. Concrete piers stand between lanes, so finish the move before the deck.</span></div></div>
+  <div class="c3-ctl y"><div class="ic hold">HOLD</div><div class="tx"><b>Hold anywhere</b><span>Hydraulics drop the load 30 cm and stop it swaying. Uses AIR. Let go and the tank refills. Run it dry and it locks until 20%.</span></div></div>
+  <div class="c3-ctl o"><div class="ic">▼</div><div class="tx"><b>Swipe down</b><span>Hammer down. 1.35× speed, 2× score, less time to read, and the load sways higher. Swipe down again to ease off.</span></div></div>
+  <div class="c3-legend"><div class="g"><b>FITS</b>go through</div><div class="y"><b>DUCK ▼</b>hold to fit</div><div class="o"><b>✕</b>change lane</div></div>
+  <div class="c3-keys">Keys ← → lane · Space hold · S hammer · C camera · M sound</div>
+  <div class="c3-acts"><div class="a back" id="c3-howback">Back</div><div class="a go" id="c3-howgo">Haul</div></div>
 </div>
 <div class="c3-card" id="c3-card">
   <div class="c3-over"><span class="y">GAME</span><span class="r">OVER</span></div>
@@ -476,7 +501,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     left: $('c3-left'), right: $('c3-right'), hint: $('c3-hint'), banner: $('c3-banner'), flash: $('c3-flash'),
     title: $('c3-title'), best: $('c3-best'), card: $('c3-card'), kind: $('c3-kind'), bname: $('c3-bname'), fkm: $('c3-fkm'),
     fmult: $('c3-fmult'), fcl: $('c3-fcl'), fbest: $('c3-fbest'), frep: $('c3-frep'), ffine: $('c3-ffine'), restart: $('c3-restart'),
-    share: $('c3-share'), start: $('c3-start'), how: $('c3-how'), ticker: $('c3-ticker'), dispo: $('c3-dispo'), hl: $('c3-hl'),
+    share: $('c3-share'), start: $('c3-start'), how: $('c3-how'), howto: $('c3-howto'), howback: $('c3-howback'), howgo: $('c3-howgo'), ticker: $('c3-ticker'), dispo: $('c3-dispo'), hl: $('c3-hl'),
   };
 
   const scene = new THREE.Scene();
@@ -1722,7 +1747,10 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   const btn = (b: HTMLElement, a: string) => b.addEventListener('pointerdown', (e) => { e.stopPropagation(); action(a); });
   btn(el.left, 'left'); btn(el.right, 'right'); btn(el.view, 'camera'); btn(el.snd, 'sound');
   el.start.addEventListener('pointerup', () => action('start'));
-  el.how.addEventListener('pointerup', () => { el.how.innerHTML = 'How to drive<small>Read the yellow plates. Green FITS, yellow DUCK: hold to lower. Orange: change lane. Air runs out.</small>'; });
+  el.how.addEventListener('pointerup', () => { el.howto.classList.add('show'); el.title.classList.add('hidden'); });
+  el.howback.addEventListener('pointerup', () => { el.howto.classList.remove('show'); el.title.classList.remove('hidden'); });
+  el.howgo.addEventListener('pointerup', () => { el.howto.classList.remove('show'); action('start'); });
+  el.howto.addEventListener('pointerdown', (e) => e.stopPropagation());
   el.share.addEventListener('pointerup', (e) => { e.stopPropagation(); shareRun(); });
   el.ticker.textContent = HEADLINES.join('   •   ') + '   •   ';
   el.restart.addEventListener('pointerup', (e) => { e.stopPropagation(); action('restart'); });
