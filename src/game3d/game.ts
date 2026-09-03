@@ -597,9 +597,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     for (const m of strips) {
       const pos = m.geometry.attributes.position as THREE.BufferAttribute;
       const arr = pos.array as Float32Array;
-      const flip = m.rotation.z !== 0 ? -1 : 1;
+      // local +y of the plane maps to world ±z depending on the mesh rotation; take the sign from the quaternion
+      tmpV.set(0, 1, 0).applyQuaternion(m.quaternion);
+      const flip = tmpV.z < 0 ? 1 : -1;
       for (let i = 0; i < pos.count; i++) {
-        const yl = arr[i * 3 + 1] * flip; // local +y maps to world -z
+        const yl = arr[i * 3 + 1] * flip;
         arr[i * 3 + 2] = hAt(d - m.position.z + yl) - h0;
       }
       pos.needsUpdate = true;

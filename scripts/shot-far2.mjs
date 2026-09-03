@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+await p.goto('file://' + process.cwd() + '/dist/clearance.html');
+await p.waitForFunction(() => typeof window.__game === 'function');
+await p.waitForTimeout(1500);
+await p.evaluate(() => { window.__gameInput('start'); window.__gameWarp(150); window.__gameStep(0.1); window.__gameCam([-14, 3, 10], [-26, 0, -120]); });
+await p.waitForTimeout(500);
+await p.screenshot({ path: 'verify/15-far-road.png' });
+await b.close();
