@@ -293,6 +293,8 @@ declare global {
 
 // ───────────────────────────── HUD ─────────────────────────────
 const CSS = `
+@font-face{font-family:'Anton';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/anton.woff2) format('woff2')}
+@font-face{font-family:'Oswald';font-style:normal;font-weight:200 700;font-display:swap;src:url(/fonts/oswald.woff2) format('woff2')}
 .c3-root{position:relative;width:100%;height:100%;overflow:hidden;background:#0b1020;font-family:${HUD_FONT};color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;--y:#f2b32a;--yd:#111;--g:#1f8a48;--gd:#12602f;--o:#f2711c;--r:#d9271f;--cream:#f4ecd8;--ink:#141414}
 .c3-root canvas{display:block;width:100%;height:100%}
 .c3-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 58%,rgba(0,0,0,.4) 100%)}

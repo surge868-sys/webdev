@@ -14,16 +14,16 @@ const res = await build({
 });
 const js = res.outputFiles[0].text;
 const glb = readFileSync('public/models/peterbilt.glb').toString('base64');
+const fontUri = (f) => `data:font/woff2;base64,${readFileSync('public/fonts/' + f).toString('base64')}`;
+const jsEmbedded = js.replace('url(/fonts/anton.woff2)', `url(${fontUri('anton.woff2')})`).replace('url(/fonts/oswald.woff2)', `url(${fontUri('oswald.woff2')})`);
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b6b3a">
 <title>BRIDGE STRIKE!</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Anton&display=swap" rel="stylesheet">
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#0b1020;overscroll-behavior:none}#game{position:fixed;inset:0}</style>
 </head><body><div id="game"></div>
-<script>${js}</script>
+<script>${jsEmbedded}</script>
 <script>Clearance.startGame(document.getElementById('game'), { modelUrl: 'data:model/gltf-binary;base64,${glb}' });</script>
 </body></html>`;
 mkdirSync('dist', { recursive: true });
