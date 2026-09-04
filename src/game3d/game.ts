@@ -91,9 +91,9 @@ const fmtClock = (s: number) => {
   const neg = s < 0; s = Math.abs(s);
   return (neg ? '−' : '') + Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 };
-const PLATE_FONT = "'Oswald', var(--font-hud), 'Arial Narrow', Impact, sans-serif";
-const HUD_FONT = "'Oswald', var(--font-hud), 'Arial Narrow', Impact, sans-serif";
-const BIG_FONT = "'Anton', var(--font-big), 'Oswald', Impact, 'Arial Narrow', sans-serif";
+const PLATE_FONT = "'Oswald', 'Arial Narrow', Impact, sans-serif";
+const HUD_FONT = "'Oswald', 'Arial Narrow', Impact, sans-serif";
+const BIG_FONT = "'Anton', 'Oswald', Impact, 'Arial Narrow', sans-serif";
 
 // ───────────────────────────── canvas textures ─────────────────────────────
 function cv2d(w: number, h: number) {
