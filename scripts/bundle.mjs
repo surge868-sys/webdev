@@ -14,6 +14,7 @@ const res = await build({
 });
 const js = res.outputFiles[0].text;
 const glb = readFileSync('public/models/peterbilt.glb').toString('base64');
+const audioUri = (f) => `data:audio/mpeg;base64,${readFileSync('public/audio/' + f).toString('base64')}`;
 const fontUri = (f) => `data:font/woff2;base64,${readFileSync('public/fonts/' + f).toString('base64')}`;
 const jsEmbedded = js.replace('url(/fonts/anton.woff2)', `url(${fontUri('anton.woff2')})`).replace('url(/fonts/oswald.woff2)', `url(${fontUri('oswald.woff2')})`);
 const html = `<!doctype html>
@@ -24,7 +25,7 @@ const html = `<!doctype html>
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#0b1020;overscroll-behavior:none}#game{position:fixed;inset:0}</style>
 </head><body><div id="game"></div>
 <script>${jsEmbedded}</script>
-<script>Clearance.startGame(document.getElementById('game'), { modelUrl: 'data:model/gltf-binary;base64,${glb}' });</script>
+<script>Clearance.startGame(document.getElementById('game'), { modelUrl: 'data:model/gltf-binary;base64,${glb}', music: { title: '${audioUri('prairie_dusk.mp3')}', run: '${audioUri('highway_tension.mp3')}', sting: '${audioUri('news_sting.mp3')}' } });</script>
 </body></html>`;
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/clearance.html', html);

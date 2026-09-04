@@ -489,7 +489,7 @@ const HUD_HTML = `
 </div>`;
 
 // ───────────────────────────── the game ─────────────────────────────
-export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: string; sound?: boolean } = {}): () => void {
+export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: string; sound?: boolean; music?: { title: string; run: string; sting: string } } = {}): () => void {
   root.classList.add('c3-root');
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -1251,8 +1251,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function audioSet(on: boolean) {
     audio.on = on;
     el.snd.textContent = on ? 'ON' : 'OFF'; el.snd.classList.toggle('on', on);
-    if (on) { audioInit(); audio.ctx!.resume(); audio.master!.gain.setTargetAtTime(0.6, audio.ctx!.currentTime, 0.1); }
-    else if (audio.master) audio.master.gain.setTargetAtTime(0, audio.ctx!.currentTime, 0.05);
+    if (on) { audioInit(); audio.ctx!.resume(); audio.master!.gain.setTargetAtTime(0.6, audio.ctx!.currentTime, 0.1); if (!music.loading) musicLoad(); else musicPlay(music.want); }
+    else { musicStop(0.3); if (audio.master) audio.master.gain.setTargetAtTime(0, audio.ctx!.currentTime, 0.05); }
   }
   function audioTick() {
     if (!audio.on || !audio.ctx) return;
@@ -1287,6 +1287,63 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     } else {
       const o = C.createOscillator(); o.type = 'square'; o.frequency.value = 90; g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12); o.connect(g); o.start(t); o.stop(t + 0.13);
     }
+  }
+
+  // ─── music: title loop, gameplay bed (ducked under decks, lifted on hammer down), news sting on game over ───
+  const MUSIC = opts.music || { title: '/audio/prairie_dusk.mp3', run: '/audio/highway_tension.mp3', sting: '/audio/news_sting.mp3' };
+  const music = {
+    buf: {} as Record<string, AudioBuffer>, loading: false, cur: null as AudioBufferSourceNode | null, curKey: '', gain: null as GainNode | null,
+    lp: null as BiquadFilterNode | null, want: '' as '' | 'title' | 'run',
+  };
+  async function musicLoad() {
+    if (music.loading || !audio.ctx) return;
+    music.loading = true;
+    const C = audio.ctx;
+    music.gain = C.createGain(); music.gain.gain.value = 0;
+    music.lp = C.createBiquadFilter(); music.lp.type = 'lowpass'; music.lp.frequency.value = 20000;
+    music.gain.connect(music.lp); music.lp.connect(audio.master!);
+    await Promise.all((['title', 'run', 'sting'] as const).map(async (k) => {
+      try { const r = await fetch(MUSIC[k]); const ab = await r.arrayBuffer(); music.buf[k] = await C.decodeAudioData(ab); }
+      catch (e) { console.warn('music', k, 'failed', e); }
+    }));
+    musicPlay(music.want);
+  }
+  function musicStop(fade = 0.4) {
+    if (!music.cur || !audio.ctx) return;
+    const src = music.cur, t = audio.ctx.currentTime;
+    music.gain!.gain.cancelScheduledValues(t); music.gain!.gain.setTargetAtTime(0, t, fade / 3);
+    setTimeout(() => { try { src.stop(); } catch { /* already stopped */ } }, fade * 1000 + 50);
+    music.cur = null; music.curKey = '';
+  }
+  function musicPlay(key: '' | 'title' | 'run') {
+    music.want = key;
+    if (!audio.on || !audio.ctx || !music.gain) return;
+    if (!key) { musicStop(); return; }
+    if (music.curKey === key) return;
+    const b = music.buf[key];
+    if (!b) return;
+    musicStop(0.5);
+    const C = audio.ctx, src = C.createBufferSource();
+    src.buffer = b; src.loop = true; src.loopStart = 0; src.loopEnd = Math.max(0.1, b.duration - 0.05);
+    src.connect(music.gain);
+    const t = C.currentTime;
+    music.gain.gain.cancelScheduledValues(t); music.gain.gain.setValueAtTime(0, t); music.gain.gain.linearRampToValueAtTime(key === 'title' ? 0.55 : 0.42, t + 1.2);
+    src.start(t);
+    music.cur = src; music.curKey = key;
+  }
+  function musicSting() {
+    if (!audio.on || !audio.ctx || !music.buf.sting) return;
+    const C = audio.ctx, src = C.createBufferSource(), g = C.createGain();
+    src.buffer = music.buf.sting; g.gain.value = 0.9; src.connect(g); g.connect(audio.master!);
+    src.start(C.currentTime + 0.45); // one beat of silence after the crunch
+  }
+  function musicTick() {
+    if (!music.cur || !audio.ctx || music.curKey !== 'run') return;
+    const t = audio.ctx.currentTime;
+    // under a deck: drop to a muffled murmur so the shave zing lands in the gap
+    const under = bridges.some((b) => b.active && !b.cleared && G.dist + G.z1 > b.w && G.dist + G.z0 < b.w + b.depth);
+    music.lp!.frequency.setTargetAtTime(under ? 320 : G.hammer ? 20000 : 9000, t, 0.08);
+    music.gain!.gain.setTargetAtTime(under ? 0.14 : G.hammer ? 0.55 : 0.42, t, 0.1);
   }
 
   // ─── state ───
@@ -1380,6 +1437,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function beginRun() {
     resetRun();
     G.phase = 'run';
+    musicPlay('run');
     setTitleBg(false);
     el.title.classList.add('hidden');
     el.hud.classList.remove('hidden');
@@ -1390,7 +1448,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function crash(kind: 'BRIDGE STRIKE' | 'PIER STRIKE' | 'COLLISION', b: Bridge | null, point: THREE.Vector3, label = '') {
     G.phase = 'crash'; G.crashKind = kind; G.crashBridge = b ? b.name : label; G.crashT = 0; G.crashPt.copy(point); G.hold = false;
     if (G.score > G.best) { G.best = G.score; try { localStorage.setItem('clr3d.best', String(G.best)); } catch { /* ignore */ } }
-    if (reduceMotion) { showFail(); return; }
+    if (reduceMotion) { musicStop(0.05); musicSting(); showFail(); return; }
     loadG.visible = false;
     for (const c of chunks) {
       c.m.visible = true;
@@ -1398,7 +1456,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
       c.v.set((rngFx() - 0.5) * 10, 2 + rngFx() * 8, 5 + rngFx() * 12);
       c.av.set(rngFx() * 6, rngFx() * 6, rngFx() * 6);
     }
-    G.shake = 1; sfx('crash');
+    G.shake = 1; sfx('crash'); musicStop(0.05); musicSting();
     el.flash.style.transition = 'none'; el.flash.style.opacity = '0.7';
     requestAnimationFrame(() => { el.flash.style.transition = 'opacity .6s'; el.flash.style.opacity = '0'; });
   }
@@ -1768,7 +1826,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     placeWorld(dtReal);
     updateCamera(dtReal);
     if (G.phase !== 'title') updateHud();
-    audioTick();
+    audioTick(); musicTick();
     if (G.phase !== 'title') renderer.render(scene, camera);
   }
   function resize() {
@@ -1859,6 +1917,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     resetBridges(); setWaypoint(G.wpIdx); applyTimeOfDay(G.tod);
   };
   window.__gameInput = action;
+  (window as unknown as { __musicState: () => unknown }).__musicState = () => ({ on: audio.on, loaded: Object.keys(music.buf), playing: music.curKey, want: music.want, ctx: audio.ctx?.state });
   window.__gameCam = (pos, target) => { camOverride = pos ? { p: new THREE.Vector3(...pos), t: new THREE.Vector3(...(target || [0, 2, -12])) } : null; };
   // deterministic stepping for headless bots (rendering is not needed to advance the sim)
   window.__gameStep = (seconds: number) => { const n = Math.max(1, Math.round(seconds * 60)); for (let i = 0; i < n && G.phase === 'run'; i++) simulate(1 / 60); };
@@ -1868,6 +1927,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   el.best.textContent = G.best > 0 ? `Best haul ${G.best.toFixed(2)} km` : '';
   resetRun();
   setTitleBg(true);
+  music.want = 'title';
   placeWorld(0);
   raf = requestAnimationFrame(frame);
 
@@ -1877,7 +1937,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     ro.disconnect();
     window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp);
     delete window.__game; delete window.__gameWarp; delete window.__gameInput; delete window.__gameStep; delete window.__gameCam;
-    pmrem.dispose(); envTex?.dispose(); renderer.dispose(); audio.ctx?.close();
+    musicStop(0.01); pmrem.dispose(); envTex?.dispose(); renderer.dispose(); audio.ctx?.close();
     root.innerHTML = ''; root.classList.remove('c3-root');
   };
 }
