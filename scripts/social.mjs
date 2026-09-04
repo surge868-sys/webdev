@@ -5,18 +5,19 @@ mkdirSync('verify/social', { recursive: true });
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
 async function session(w, h, dpr, run) {
   const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
+  p.setDefaultTimeout(180000);
   await p.goto('file://' + process.cwd() + '/dist/clearance.html');
   await p.waitForFunction(() => typeof window.__game === 'function');
   await p.waitForTimeout(3000); await p.evaluate(() => document.fonts.ready);
   await run(p); await p.close();
 }
 const step = (p, secs) => p.evaluate((s) => { for (let i = 0; i < s * 30; i++) window.__gameFrame(1 / 30); }, secs);
-await session(540, 960, 2, async (p) => {
+await session(1080, 1920, 1, async (p) => {
   await p.screenshot({ path: 'verify/social/01-title-1080x1920.png' });
   await p.evaluate(() => { window.__gamePause(true); window.__gameInput('start'); });
-  await step(p, 1.2); await p.screenshot({ path: 'verify/social/02-approach-1080x1920.png' });
+  await step(p, 0.6); await p.screenshot({ path: 'verify/social/02-approach-1080x1920.png' });
   await p.evaluate(() => window.__gameWarp(1450)); await step(p, 0.3);
-  await p.evaluate(() => { window.__gameInput('hammer'); }); await step(p, 1.4);
+  await p.evaluate(() => { window.__gameInput('hammer'); }); await step(p, 0.8);
   await p.screenshot({ path: 'verify/social/03-dusk-hammer-1080x1920.png' });
   await p.evaluate(() => window.__gameWarp(1900)); await step(p, 0.3);
   // steer into the lowest lane and let it hit
