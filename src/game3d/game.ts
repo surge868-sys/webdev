@@ -314,8 +314,8 @@ const CSS = `
 .c3-wp .km{font-size:28px}.c3-wp .km small{font-size:12px;margin-left:4px;letter-spacing:.1em}
 .c3-wp .t{font-size:20px}.c3-wp .t.late{color:#ffb3a8}
 .c3-wp .mult{font-size:12px;letter-spacing:.12em;color:#ffd24a;font-weight:700;min-height:12px;margin-top:2px}
-.c3-snd,.c3-view{position:absolute;top:max(12px,env(safe-area-inset-top));width:46px;height:46px;border-radius:50%;background:#111;border:3px solid #fff;display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;font-size:11px;letter-spacing:.06em;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.45)}
-.c3-snd{right:12px}.c3-view{right:12px;top:calc(max(12px,env(safe-area-inset-top)) + 54px);font-size:10px}
+.c3-snd,.c3-view{position:absolute;top:max(12px,env(safe-area-inset-top));width:46px;height:46px;border-radius:50%;background:#111;border:3px solid #fff;display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;font-size:18px;letter-spacing:.06em;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.c3-snd{right:12px}.c3-view{right:12px;top:calc(max(12px,env(safe-area-inset-top)) + 54px);font-size:10px;letter-spacing:.06em}
 .c3-snd.on{background:var(--y);color:#111;border-color:#111}
 .c3-next{position:absolute;top:calc(max(12px,env(safe-area-inset-top)) + 110px);left:50%;transform:translateX(-50%);display:flex;gap:8px}
 .c3-chip{width:74px;padding:5px 0 6px;text-align:center;border-radius:7px;border:3px solid #111;box-shadow:0 3px 0 rgba(0,0,0,.45);background:#8a8a8a;color:#111;transition:background .12s}
@@ -427,7 +427,7 @@ const HUD_HTML = `
 <div class="c3-vig"></div>
 <div class="c3-hud hidden" id="c3-hud">
   <div class="c3-sign c3-green c3-wp"><div class="n" id="c3-wpn">—</div><div class="row"><div class="km c3-big"><span id="c3-km">0.00</span><small>km</small></div><div class="t c3-big" id="c3-wpt">—</div></div><div class="mult" id="c3-mult"></div></div>
-  <div class="c3-snd" id="c3-snd">OFF</div>
+  <div class="c3-snd" id="c3-snd">🔇</div>
   <div class="c3-view" id="c3-view">CAM</div>
   <div class="c3-next" id="c3-next">
     <div class="c3-chip" id="c3-chip0"><div class="h">–</div><div class="v"></div><div class="bar"></div></div>
@@ -1250,7 +1250,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   }
   function audioSet(on: boolean) {
     audio.on = on;
-    el.snd.textContent = on ? 'ON' : 'OFF'; el.snd.classList.toggle('on', on);
+    el.snd.textContent = on ? '🔊' : '🔇'; el.snd.classList.toggle('on', on);
     if (on) { audioInit(); audio.ctx!.resume(); audio.master!.gain.setTargetAtTime(0.6, audio.ctx!.currentTime, 0.1); if (!music.loading) musicLoad(); else musicPlay(music.want); }
     else { musicStop(0.3); if (audio.master) audio.master.gain.setTargetAtTime(0, audio.ctx!.currentTime, 0.05); }
   }
@@ -1817,7 +1817,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     el.mode.textContent = G.airLocked ? 'Air empty' : G.lowered > 0.02 ? 'Load lowered' : G.hammer ? 'Hammer down' : 'Full ahead';
     el.mode.className = 'mode' + (G.airLocked ? ' hammer' : G.lowered > 0.02 ? ' brake' : G.hammer ? ' hammer' : '');
     el.airbar.style.transform = `scaleX(${G.air.toFixed(3)})`;
-    el.air.className = 'air' + (G.airLocked ? ' lock' : G.air < 0.3 ? ' low' : '');
+    el.air.className = 'c3-air' + (G.airLocked ? ' lock' : G.air < 0.3 ? ' low' : '');
     el.h.textContent = hEff().toFixed(2) + ' m'; el.hl.textContent = LOADS[G.loadIdx].name;
     el.mult.textContent = G.mult > 1 ? `×${G.mult}${G.hammer ? ' · HAMMER DOWN' : ''}` : '';
     el.wpn.textContent = `${wpName()} · ${Math.max(0, (G.wpW - G.dist) / 1000).toFixed(2)} km`;
@@ -1862,7 +1862,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
       case 'release': G.hold = false; break;
       case 'hammer': case 'throttle': if (G.phase === 'run') { G.hammer = !G.hammer; banner(G.hammer ? 'Hammer down' : 'Easing off', G.hammer ? '×2 score · less time to read' : '', G.hammer, 900); } break;
       case 'camera': camMode = camMode === 'chase' ? 'dolly' : 'chase'; break;
-      case 'sound': audioSet(!audio.on); break;
+      case 'sound': audioSet(!audio.on); mutedPref = !audio.on; try { localStorage.setItem('clr3d.muted', audio.on ? '0' : '1'); } catch { /* ignore */ } break;
       case 'start': if (G.phase === 'title' || G.phase === 'fail') beginRun(); break;
       case 'restart': if (G.phase === 'fail' || G.phase === 'run') beginRun(); break;
     }
@@ -1903,6 +1903,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   cvs.addEventListener('pointerup', onUp); cvs.addEventListener('pointercancel', onUp);
   const btn = (b: HTMLElement, a: string) => b.addEventListener('pointerdown', (e) => { e.stopPropagation(); action(a); });
   btn(el.left, 'left'); btn(el.right, 'right'); btn(el.view, 'camera'); btn(el.snd, 'sound');
+  // sound is on by default; browsers need a gesture first, so the first tap or key anywhere arms it
+  let mutedPref = false; try { mutedPref = localStorage.getItem('clr3d.muted') === '1'; } catch { /* ignore */ }
+  const armAudio = () => { if (!audio.on && !mutedPref) audioSet(true); root.removeEventListener('pointerdown', armAudio, true); window.removeEventListener('keydown', armAudio, true); };
+  root.addEventListener('pointerdown', armAudio, true);
+  window.addEventListener('keydown', armAudio, true);
   el.start.addEventListener('pointerup', () => action('start'));
   el.how.addEventListener('pointerup', () => { el.howto.classList.add('show'); el.title.classList.add('hidden'); });
   el.howback.addEventListener('pointerup', () => { el.howto.classList.remove('show'); el.title.classList.remove('hidden'); });
