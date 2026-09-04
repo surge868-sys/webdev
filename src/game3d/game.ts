@@ -871,7 +871,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function loadModel(url: string) {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
-    loader.load(url, (gltf) => {
+    const onLoaded = (gltf: { scene: THREE.Group }) => {
       const m = gltf.scene;
       m.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
@@ -889,7 +889,10 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
       cabProc.visible = false;
       for (const sp of spots) { sp.position.set(sp.position.x, 1.25, -9.4); }
       modelLoaded = true;
-    }, undefined, (err) => console.warn('truck model failed to load, keeping the stand-in', err));
+    };
+    const onErr = (err: unknown) => console.warn('truck model failed to load, keeping the stand-in', err);
+    if (url.startsWith('data:')) loadBytes(url).then((ab) => loader.parse(ab, '', onLoaded, onErr)).catch(onErr);
+    else loader.load(url, onLoaded, undefined, onErr);
   }
 
   // ─── the load: galvanized steel truss (a bridge girder, of course) ───
@@ -1289,6 +1292,16 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     }
   }
 
+  // bytes from a URL; data: URIs are decoded in place (the artifact sandbox blocks fetch to them)
+  async function loadBytes(url: string): Promise<ArrayBuffer> {
+    if (url.startsWith('data:')) {
+      const b64 = url.slice(url.indexOf(',') + 1);
+      const bin = atob(b64); const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out.buffer;
+    }
+    const r = await fetch(url); return r.arrayBuffer();
+  }
   // ─── music: title loop, gameplay bed (ducked under decks, lifted on hammer down), news sting on game over ───
   const MUSIC = opts.music || { title: '/audio/prairie_dusk.mp3', run: '/audio/highway_tension.mp3', sting: '/audio/news_sting.mp3' };
   const music = {
@@ -1303,8 +1316,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     music.lp = C.createBiquadFilter(); music.lp.type = 'lowpass'; music.lp.frequency.value = 20000;
     music.gain.connect(music.lp); music.lp.connect(audio.master!);
     await Promise.all((['title', 'run', 'sting'] as const).map(async (k) => {
-      try { const r = await fetch(MUSIC[k]); const ab = await r.arrayBuffer(); music.buf[k] = await C.decodeAudioData(ab); }
-      catch (e) { console.warn('music', k, 'failed', e); }
+      try { const ab = await loadBytes(MUSIC[k]); music.buf[k] = await new Promise<AudioBuffer>((res, rej) => C.decodeAudioData(ab, res, rej)); }
+      catch (e) { console.warn('music', k, 'failed', e); el.snd.title = 'music failed: ' + String(e); el.snd.textContent = '⚠'; }
     }));
     musicPlay(music.want);
   }
@@ -1907,6 +1920,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   let mutedPref = false; try { mutedPref = localStorage.getItem('clr3d.muted') === '1'; } catch { /* ignore */ }
   const armAudio = () => { if (!audio.on && !mutedPref) audioSet(true); root.removeEventListener('pointerdown', armAudio, true); window.removeEventListener('keydown', armAudio, true); };
   root.addEventListener('pointerdown', armAudio, true);
+  root.addEventListener('pointerup', () => { if (audio.on && audio.ctx && audio.ctx.state !== 'running') audio.ctx.resume().then(() => musicPlay(music.want)); }, true);
   window.addEventListener('keydown', armAudio, true);
   el.start.addEventListener('pointerup', () => action('start'));
   el.how.addEventListener('pointerup', () => { el.howto.classList.add('show'); el.title.classList.add('hidden'); });
