@@ -13,11 +13,11 @@ const LANE_X = [-3.8, 0, 3.8];
 const ROAD_HALF = 5.7;
 const PIER_X = [-1.9, 1.9];
 const PIER_R = 0.36; // round pier radius (half-width 1.45 + 0.36 leaves 9 cm to the pier at lane centre)
-const LOAD_HALF_W = 1.45; // truss half width
+const LOAD_HALF_W = 1.38; // widest load (grain bin cradle) half width; leaves 16 cm to a pier at lane centre
 const LOAD_Z0 = 1.0; // collision span, metres ahead of the truck origin (trailer rear)
 const LOAD_Z1 = 13.5;
 const BED_H = 1.35;
-const LANE_LERP = 5;
+const LANE_TIME = 0.5; // seconds for a lane change (eased, always completes)
 const DUCK_MAX = 0.3; // hydraulics drop (m) — "a little bit"
 const DUCK_SPEED = DUCK_MAX / 0.2;
 const SPRING_K = 8;
@@ -44,7 +44,7 @@ const NIGHT_KM = 3.2;
 const SWAY_K = 4;
 const SWAY_C = 0.55;
 const SWAY_C_LOW = 4.5; // lowered load = low centre of gravity = steady
-const SWAY_A = 0.036;
+const SWAY_A = 0.021; // steady-state lift ≈ 3 cm at cruise, ≈ 7 cm hammer down, < 1 cm lowered
 const SWAY_HAMMER = 2.2;
 const SWAY_ARM = 1.6;
 
@@ -964,7 +964,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   }
 
   // ─── traffic: half-tons and grain trucks in our lanes, oncoming on the far carriageway ───
-  interface Vehicle { g: THREE.Group; w: number; x: number; v: number; len: number; kind: 'pickup' | 'grain'; lane: number; active: boolean; lights: THREE.Mesh[]; wheels: THREE.Mesh[] }
+  interface Vehicle { g: THREE.Group; w: number; x: number; v: number; len: number; kind: 'pickup' | 'grain'; lane: number; active: boolean; lights: THREE.Mesh[]; wheels: THREE.Mesh[]; yielded: number }
   const VEH_COLORS = ['#e8e6df', '#b9bec4', '#7a1f1a', '#2b4a7a', '#1b1c1e', '#4d6b3a', '#c8c2b0'];
   const vehWheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.3, 14); vehWheelGeo.rotateZ(Math.PI / 2);
   const bigWheelGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.6, 14); bigWheelGeo.rotateZ(Math.PI / 2);
@@ -998,7 +998,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     }
     g.visible = false;
     scene.add(g);
-    return { g, w: 0, x: 0, v: 0, len: kind === 'pickup' ? 5.5 : 9.7, kind, lane: 1, active: false, lights, wheels: wheelsV };
+    return { g, w: 0, x: 0, v: 0, len: kind === 'pickup' ? 5.5 : 9.7, kind, lane: 1, active: false, lights, wheels: wheelsV, yielded: -1 };
   }
   const traffic: Vehicle[] = [];
   const oncoming: Vehicle[] = [];
@@ -1020,7 +1020,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     while (tries++ < 8 && (nearBridge(w) || ahead.some((o) => Math.abs(o.w - w) < 110))) w += 45 + rngWorld() * 60;
     if (tries >= 8) return;
     const lane = Math.floor(rngWorld() * 3);
-    v.w = w; v.lane = lane; v.x = LANE_X[lane]; v.v = (0.52 + rngWorld() * 0.22); v.active = true; v.g.visible = true;
+    v.w = w; v.lane = lane; v.x = LANE_X[lane]; v.v = (0.52 + rngWorld() * 0.22); v.active = true; v.g.visible = true; v.yielded = -1;
   }
   function spawnOncoming() {
     const v = oncoming.find((t) => !t.active);
@@ -1349,7 +1349,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── state ───
   const G = {
     phase: 'title' as Phase, dist: 0, speed: 0, hold: false, lowered: 0, lowerVel: 0, air: 1, airLocked: false, hammer: false, mult: 1, score: 0,
-    lane: 1, laneX: 0, loadH: 4.75, loadIdx: 0, z0: LOAD_Z0, z1: LOAD_Z1, nextUpgrade: UPGRADE_FIRST, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
+    lane: 1, laneX: 0, laneFrom: 0, laneT: 1, loadH: 4.75, loadIdx: 0, z0: LOAD_Z0, z1: LOAD_Z1, nextUpgrade: UPGRADE_FIRST, sway: 0, swayV: 0, swayPh: 0, gustLift: 0, potholeBounce: 0,
     cleared: 0, shaveChain: 0, shaveUntil: -1, shaveRun: 0, topMult: 1, bridgeCount: 0, nextW: FIRST_BRIDGE,
     wpIdx: 0, wpW: 0, wpDeadline: 0, wpClock: 0, dispIdx: 0, dispProg: 0, bonusKm: 0,
     crashKind: null as string | null, crashBridge: '', crashT: 0, crashPt: new THREE.Vector3(), shake: 0, time: 0, best: 0, tod: 0,
@@ -1358,6 +1358,9 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   const lift = () => SWAY_ARM * Math.abs(Math.sin(G.sway));
   const hEff = () => G.loadH - G.lowered + lift() + G.gustLift + G.potholeBounce;
   const hMin = () => G.loadH - DUCK_MAX + G.gustLift + G.potholeBounce; // fully lowered and steady
+  // the sway peak you can expect at the current speed: what a lane must clear to be called FITS without holding
+  const swayPeak = () => { const sf = (1 + 0.5 * clamp((G.speed - BASE_SPEED) / 20, 0, 1)) * (G.hammer ? SWAY_HAMMER : 1); const c = lerp(SWAY_C, SWAY_C_LOW, G.lowered / DUCK_MAX); const th = (SWAY_A * sf * 1.6) / Math.sqrt((SWAY_K - 4.41) ** 2 + (c * 2.1) ** 2); return SWAY_ARM * Math.sin(th * 1.15); };
+  const hSwayMax = () => G.loadH - G.lowered + Math.max(lift(), swayPeak()) + G.gustLift + G.potholeBounce;
 
   // ─── clearance generation (relative to the load's resting height h; posted in 0.05 m steps) ───
   // graze: fits untouched by <10 cm (the greed tier) · easy · tight: partial duck · max: near-full duck
@@ -1421,7 +1424,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   function resetRun() {
     G.dist = 0; G.speed = BASE_SPEED; G.hold = false; G.lowered = 0; G.lowerVel = 0; G.air = 1; G.airLocked = false; G.hammer = false; G.mult = 1; G.score = 0;
     G.loadIdx = 0; G.nextUpgrade = UPGRADE_FIRST; setLoad(0);
-    G.lane = 1; G.laneX = 0; G.sway = 0; G.swayV = 0; G.swayPh = rngFx() * 6; G.gustLift = 0; G.potholeBounce = 0;
+    G.lane = 1; G.laneX = 0; G.laneFrom = 0; G.laneT = 1; G.sway = 0; G.swayV = 0; G.swayPh = rngFx() * 6; G.gustLift = 0; G.potholeBounce = 0;
     G.cleared = 0; G.shaveChain = 0; G.shaveUntil = -1; G.shaveRun = 0; G.topMult = 1; G.bonusKm = 0;
     G.crashKind = null; G.crashBridge = ''; G.crashT = 0; G.shake = 0; G.tod = 0; G.dispIdx = 0; G.dispProg = 0;
     rngWorld = mulberry32(seed + 1);
@@ -1549,11 +1552,12 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     G.score += (G.speed * dt / 1000) * G.mult;
     // lane
     const tx = LANE_X[G.lane];
-    const dx = (tx - G.laneX) * Math.min(1, LANE_LERP * dt);
-    G.laneX += dx;
-    if (Math.abs(tx - G.laneX) < 0.004) G.laneX = tx;
+    const prevX = G.laneX;
+    if (G.laneT < 1) { G.laneT = Math.min(1, G.laneT + dt / LANE_TIME); G.laneX = lerp(G.laneFrom, tx, smooth(G.laneT)); }
+    else G.laneX = tx;
+    const dx = G.laneX - prevX;
     // sway: driven oscillator, excited by speed (and hammer), damped hard by braking
-    const sf = (G.speed / BASE_SPEED) ** 2 * (G.hammer ? SWAY_HAMMER : 1);
+    const sf = (1 + 0.5 * clamp((G.speed - BASE_SPEED) / 20, 0, 1)) * (G.hammer ? SWAY_HAMMER : 1); // speed matters, but is capped
     G.swayPh += dt;
     const ex = SWAY_A * sf * (Math.sin(2.1 * G.swayPh) + 0.6 * Math.sin(3.7 * G.swayPh + 1.3));
     const c = lerp(SWAY_C, SWAY_C_LOW, G.lowered / DUCK_MAX);
@@ -1573,6 +1577,16 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
       if (!v.active) continue;
       v.w += v.v * base0 * dt;
       if (v.w + v.len < G.dist - 40 || v.w > G.dist + 900) { v.active = false; v.g.visible = false; continue; }
+      // never park in a bridge's best lane: 90 m out, traffic moves to another lane (the wrong one, usually)
+      for (const b of bridges) {
+        if (!b.active || b.cleared) continue;
+        if (v.w > b.w - 95 && v.w < b.w + b.depth && v.yielded !== b.id) {
+          v.yielded = b.id;
+          const best = b.lanes.reduce((m, L, i) => (L.clear > b.lanes[m].clear ? i : m), 0);
+          if (v.lane === best) v.lane = best === 1 ? (rngWorld() < 0.5 ? 0 : 2) : 1;
+        }
+      }
+      v.x += (LANE_X[v.lane] - v.x) * Math.min(1, 2.5 * dt);
       // our rig spans [dist, dist + 20.9] in lane laneX
       const overlapW = v.w < G.dist + 20.9 && v.w + v.len > G.dist;
       if (overlapW && Math.abs(G.laneX - v.x) < LOAD_HALF_W + 1.05) {
@@ -1778,7 +1792,7 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     let nb: Bridge | null = null;
     for (const b of bridges) if (b.active && !b.cleared && b.w + b.depth > d + G.z0 && (!nb || b.w < nb.w)) nb = b;
     if (nb && nb.w < d + LOOK_AHEAD) {
-      updateVerdicts(nb, hEff(), hMin());
+      updateVerdicts(nb, hSwayMax(), hMin());
       marker.visible = G.phase === 'run';
       marker.position.set(G.laneX, hEff() + hAt(nb.w + nb.depth / 2) - h0, d - nb.w + 0.6);
       marker.rotation.z = G.sway;
@@ -1842,8 +1856,8 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   // ─── input ───
   function action(a: string) {
     switch (a) {
-      case 'left': if (G.phase === 'run' && G.lane > 0) { G.lane--; sfx('lane'); } break;
-      case 'right': if (G.phase === 'run' && G.lane < 2) { G.lane++; sfx('lane'); } break;
+      case 'left': if (G.phase === 'run' && G.lane > 0) { G.lane--; G.laneFrom = G.laneX; G.laneT = 0; sfx('lane'); } break;
+      case 'right': if (G.phase === 'run' && G.lane < 2) { G.lane++; G.laneFrom = G.laneX; G.laneT = 0; sfx('lane'); } break;
       case 'hold': case 'brake': G.hold = G.phase === 'run'; break;
       case 'release': G.hold = false; break;
       case 'hammer': case 'throttle': if (G.phase === 'run') { G.hammer = !G.hammer; banner(G.hammer ? 'Hammer down' : 'Easing off', G.hammer ? '×2 score · less time to read' : '', G.hammer, 900); } break;
@@ -1869,19 +1883,20 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
   const onKeyUp = (e: KeyboardEvent) => { if (e.code === 'Space' || e.code === 'ArrowDown') action('release'); };
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
-  let pid: number | null = null, px0 = 0, py0 = 0, swiped = false;
+  let pid: number | null = null, px0 = 0, py0 = 0, swiped = false, t0 = 0;
   const cvs = renderer.domElement;
   const onDown = (e: PointerEvent) => {
     if (pid !== null) return;
-    pid = e.pointerId; px0 = e.clientX; py0 = e.clientY; swiped = false;
+    pid = e.pointerId; px0 = e.clientX; py0 = e.clientY; swiped = false; t0 = performance.now();
     cvs.setPointerCapture?.(e.pointerId);
     if (G.phase === 'run') action('hold');
   };
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== pid || swiped) return;
-    const dx = e.clientX - px0, dy = e.clientY - py0, th = 28;
-    if (Math.abs(dx) > th && Math.abs(dx) > Math.abs(dy)) { swiped = true; action('release'); action(dx < 0 ? 'left' : 'right'); }
-    else if (dy > th * 1.6 && Math.abs(dy) > Math.abs(dx)) { swiped = true; action('release'); action('hammer'); }
+    const dx = e.clientX - px0, dy = e.clientY - py0, th = 40;
+    if (performance.now() - t0 > 320) return; // slow drift while holding is still a hold
+    if (Math.abs(dx) > th && Math.abs(dx) > Math.abs(dy) * 1.3) { swiped = true; action('release'); action(dx < 0 ? 'left' : 'right'); }
+    else if (dy > th * 1.4 && dy > Math.abs(dx) * 1.3) { swiped = true; action('release'); action('hammer'); }
   };
   const onUp = (e: PointerEvent) => { if (e.pointerId !== pid) return; pid = null; action('release'); };
   cvs.addEventListener('pointerdown', onDown); cvs.addEventListener('pointermove', onMove);
