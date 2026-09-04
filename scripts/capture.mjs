@@ -18,7 +18,9 @@ for (let i = 0; i < FPS * 2; i++) { await shot(); await p.waitForTimeout(10); }
 await p.evaluate(() => { window.__gamePause(true); window.__gameInput('start'); });
 const input = (a) => p.evaluate((a) => window.__gameInput(a), a);
 let hold = false, crashedAt = -1, log = [];
-for (let i = 0; i < FPS * SECS; i++) {
+await p.evaluate(() => window.__gameWarp(320)); // skip the slow opening: start at speed with the first upgrade near
+let failAt = -1;
+for (let i = 0; i < FPS * (SECS + 12); i++) {
   const s = await p.evaluate(() => window.__game());
   if (s.phase === 'run') {
     const nb = s.bridges[0];
@@ -39,12 +41,13 @@ for (let i = 0; i < FPS * SECS; i++) {
     if (i === FPS * 9) await input('hammer');
     if (i === FPS * 15) await input('hammer');
     // deliberately strike near the end so the video has a punchline
-    if (i > FPS * (SECS - 7) && nb && nb.w - s.dist < 60) { let worst = 0; for (let k = 1; k < 3; k++) if (nb.clears[k] < nb.clears[worst]) worst = k; if (worst !== s.lane) await input(worst < s.lane ? 'left' : 'right'); if (hold) { await input('release'); hold = false; } }
+    if (i > FPS * (SECS - 9) && nb && nb.w - s.dist < 110) { let worst = 0; for (let k = 1; k < 3; k++) if (nb.clears[k] < nb.clears[worst]) worst = k; if (worst !== s.lane) await input(worst < s.lane ? 'left' : 'right'); if (hold) { await input('release'); hold = false; } }
   } else if (s.phase === 'crash' && crashedAt < 0) crashedAt = n;
+  else if (s.phase === 'fail' && failAt < 0) failAt = n;
   await p.evaluate((dt) => window.__gameFrame(dt), 1 / FPS);
   await shot();
   log.push({ f: n, d: Math.round(s.dist), phase: s.phase, cleared: s.cleared });
-  if (s.phase === 'fail' && n - crashedAt > FPS * 3) break;
+  if (failAt > 0 && n - failAt > FPS * 3) break;
 }
 writeFileSync(`${out}/log.json`, JSON.stringify({ frames: n, crashedAt, fps: FPS, last: log[log.length - 1] }));
 console.log('frames', n, 'crashedAt', crashedAt, JSON.stringify(log[log.length - 1]));
