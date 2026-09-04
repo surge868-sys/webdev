@@ -12,7 +12,7 @@ async function session(w, h, dpr, run) {
   await run(p); await p.close();
 }
 const step = (p, secs) => p.evaluate((s) => { for (let i = 0; i < s * 30; i++) window.__gameFrame(1 / 30); }, secs);
-await session(1080, 1920, 1, async (p) => {
+await session(390, 693, 1080 / 390, async (p) => {
   await p.screenshot({ path: 'verify/social/01-title-1080x1920.png' });
   await p.evaluate(() => { window.__gamePause(true); window.__gameInput('start'); });
   await step(p, 0.6); await p.screenshot({ path: 'verify/social/02-approach-1080x1920.png' });
@@ -25,7 +25,7 @@ await session(1080, 1920, 1, async (p) => {
   await step(p, 0.25); await p.screenshot({ path: 'verify/social/04-strike-1080x1920.png' });
   await step(p, 1.6); await p.screenshot({ path: 'verify/social/05-gameover-1080x1920.png' });
 });
-await session(1200, 630, 1, async (p) => {
+await session(600, 315, 2, async (p) => {
   await p.evaluate(() => { window.__gamePause(true); window.__gameInput('start'); window.__gameWarp(700); });
   await step(p, 0.4);
   await p.evaluate(() => { document.getElementById('c3-hud').style.display = 'none'; window.__gameCam([-9, 4.2, -2], [1.5, 2.8, -22]); });
