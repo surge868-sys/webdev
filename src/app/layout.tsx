@@ -3,8 +3,17 @@ import './globals.css';
 
 
 export const metadata: Metadata = {
-  title: 'BRIDGE STRIKE! — haul the load, miss the overpass',
-  description: 'A one-thumb browser game about hauling an oversized load into a prairie city without smashing it into an overpass.',
+  title: 'BRIDGE STRIKE!',
+  description: 'Haul three excavators, a grain bin and some farm equipment into Saskatoon without meeting an overpass. One thumb. No permit. Based on a true year.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://bridgestrike.vercel.app'),
+  openGraph: {
+    title: 'BRIDGE STRIKE!',
+    description: 'Haul the load. Read the plates. Duck. Based on a true year in Saskatoon.',
+    type: 'website',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'BRIDGE STRIKE! — a Peterbilt hauling an excavator toward an overpass' }],
+  },
+  twitter: { card: 'summary_large_image', title: 'BRIDGE STRIKE!', description: 'Haul the load. Read the plates. Duck.', images: ['/og.png'] },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'BRIDGE STRIKE!' },
 };
 
 export const viewport: Viewport = {

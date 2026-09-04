@@ -1841,10 +1841,11 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     el.cl.textContent = String(G.cleared);
     el.view.textContent = camMode === 'chase' ? 'CAM' : 'SIDE';
   }
-  let last = performance.now(), raf = 0, alive = true, todAcc = 0;
+  let last = performance.now(), raf = 0, alive = true, todAcc = 0, paused = false;
   function frame(now: number) {
     if (!alive) return;
     raf = requestAnimationFrame(frame);
+    if (paused) { last = now; return; }
     const dtReal = Math.min(0.05, (now - last) / 1000);
     last = now; G.time += dtReal;
     if (G.phase === 'run') simulate(dtReal); else if (G.phase === 'crash') simulateCrash(dtReal);
@@ -1951,6 +1952,15 @@ export function startGame(root: HTMLElement, opts: { seed?: number; modelUrl?: s
     resetBridges(); setWaypoint(G.wpIdx); applyTimeOfDay(G.tod);
   };
   window.__gameInput = action;
+  // deterministic capture: pause the live loop and advance exactly dt per call (sim + render)
+  (window as unknown as { __gamePause: (v: boolean) => void }).__gamePause = (v: boolean) => { paused = v; };
+  (window as unknown as { __gameFrame: (dt: number) => void }).__gameFrame = (dt: number) => {
+    G.time += dt;
+    if (G.phase === 'run') simulate(dt); else if (G.phase === 'crash') simulateCrash(dt);
+    todAcc += dt; if (todAcc > 0.25 && G.phase !== 'title') { todAcc = 0; applyTimeOfDay(G.tod); }
+    placeWorld(dt); updateCamera(dt); if (G.phase !== 'title') updateHud();
+    if (G.phase !== 'title') renderer.render(scene, camera);
+  };
   (window as unknown as { __musicState: () => unknown }).__musicState = () => ({ on: audio.on, loaded: Object.keys(music.buf), playing: music.curKey, want: music.want, ctx: audio.ctx?.state });
   window.__gameCam = (pos, target) => { camOverride = pos ? { p: new THREE.Vector3(...pos), t: new THREE.Vector3(...(target || [0, 2, -12])) } : null; };
   // deterministic stepping for headless bots (rendering is not needed to advance the sim)
