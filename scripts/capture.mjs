@@ -1,7 +1,7 @@
 // Frame-by-frame gameplay capture: node scripts/capture.mjs <outdir> [seconds] [w] [h]
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
-const out = process.argv[2] || 'verify/frames', SECS = +(process.argv[3] || 26), W = +(process.argv[4] || 720), H = +(process.argv[5] || 1280), FPS = 30;
+const out = process.argv[2] || 'verify/frames', SECS = +(process.argv[3] || 26), W = +(process.argv[4] || 720), H = +(process.argv[5] || 1280), FPS = +(process.env.FPS || 20);
 mkdirSync(out, { recursive: true });
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
 const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
